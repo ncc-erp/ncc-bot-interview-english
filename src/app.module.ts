@@ -7,6 +7,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { InterviewerModule } from "./interviewer/interviewer.module";
 import { DatabaseTestModule } from "./database-test/database-test.module";
+import { RecordAudioModule } from "./record-audio/record-audio.module";
 
 @Module({
   imports: [
@@ -38,13 +39,16 @@ import { DatabaseTestModule } from "./database-test/database-test.module";
         botId: configService.get<string>("MEZON_BOT_ID")!,
         host: "dev-mezon.nccsoft.vn",
         port: "8088",
+        useSSL: configService.get<boolean>('MEZON_USE_SSL') ?? true,
+        timeout: configService.get<number>('MEZON_TIMEOUT') || 7000,
         mmnApiUrl: "https://dev-mmn.nccsoft.vn/mmn-api/",
         zkApiUrl: "https://dev-mmn.nccsoft.vn/zk-api/",
       }),
     }),
     EnglishTestModule,
+    RecordAudioModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule { }

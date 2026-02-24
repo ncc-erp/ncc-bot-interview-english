@@ -80,6 +80,13 @@ export class AgentService {
       const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
       const url = `${baseurl}${AGENT_ENDPOINTS.AGENT_CONTROL_TRANSCRIPT}`;
 
+      // NEW: Disable transcript before removing agent
+      try {
+        await this.disableTranscript(meeting_code);
+      } catch (error) {
+        this.logger.warn(`Failed to disable transcript, continuing with removal...`);
+      }
+
       const payload = {
         action: "enable",
         room_name: roomName,
@@ -134,157 +141,215 @@ export class AgentService {
     }
   }
 
-  async handleRemoveAgent(
-    client: Nezon.Client,
-    event: AgentEvent,
-    account: Account
-  ): Promise<void> {
+  /**
+ * UPDATED: Handle removing agent with correct payload format
+ */
+async handleRemoveAgent(
+  client: Nezon.Client,
+  event: AgentEvent,
+  account: Account,
+  sessionId: string, // NEW: Optional sessionId
+): Promise<void> {
+  try {
+    const channel = await client.channels.fetch(
+      event.voice_channel_id ?? event.channel_id ?? ""
+    );
+
+    if (!channel?.meeting_code) {
+      this.logger.error("Channel or meeting_code not found");
+      return;
+    }
+
+    const meeting_code = channel.meeting_code;
+
+    // NEW: Disable transcript before removing agent
     try {
-      const channel = await client.channels.fetch(
-        event.voice_channel_id ?? event.channel_id ?? ""
-      );
+      await this.disableTranscript(meeting_code);
+    } catch (error) {
+      this.logger.warn(`Failed to disable transcript, continuing with removal...`);
+    }
 
-      if (!channel?.meeting_code) {
-        this.logger.error("Channel or meeting_code not found");
-        return;
-      }
+    // UPDATED: Payload with type and metadata
+    const payload = {
+      account,
+      room_name: meeting_code,
+      type: "interview",
+      metadata: {
+        interview_id: sessionId,
+      },
+    };
 
-      const meeting_code = channel.meeting_code;
+    this.logger.log(`Removing agent with payload: ${JSON.stringify(payload)}`);
 
-      // NEW: Disable transcript before removing agent
-      try {
-        await this.disableTranscript(meeting_code);
-      } catch (error) {
-        this.logger.warn(`Failed to disable transcript, continuing with removal...`);
-      }
+    const response = await this.axiosClient
+      .getInstance()
+      .post(AGENT_ENDPOINTS.CANCEL_DISPATCH, payload);
 
-      const payload = {
-        account,
-        room_name: meeting_code,
-      };
+    this.logger.log(
+      `Agent removed, API response: ${JSON.stringify(response.data)}`
+    );
 
+    const sseKey = `${account.appid}-${meeting_code}`;
+    const existingSSE = this.sseConnections.get(sseKey);
+    if (existingSSE) {
+      existingSSE.close();
+      this.sseConnections.delete(sseKey);
+      this.logger.log(`🔌 Closed SSE connection for room ${meeting_code}`);
+    }
+
+    // Clean up processed messages for this room
+    this.processedMessages.delete(meeting_code);
+
+    if (this.roomSessions.has(meeting_code)) {
+      const sessionId = this.roomSessions.get(meeting_code);
+      this.roomSessions.delete(meeting_code);
+      // Clear cache when removing session
+      this.sessionCache.delete(sessionId!);
+      this.logger.log(`🗑️ Cleared session ${sessionId} mapping for room ${meeting_code}`);
+    }
+  } catch (error) {
+    this.logger.error(
+      `Error removing agent: ${error}`,
+      (error as Error)?.stack
+    );
+  }
+}
+
+  async handleInviteAgent(
+  client: Nezon.Client,
+  event: AgentEvent,
+  account: Account,
+  sessionId: string, // NEW: Required sessionId
+): Promise<void> {
+  try {
+    const channel = await client.channels.fetch(
+      event.voice_channel_id ?? event.channel_id ?? ""
+    );
+
+    if (!channel?.meeting_code) {
+      this.logger.error("Channel or meeting_code not found");
+      return;
+    }
+
+    const meeting_code = channel.meeting_code;
+
+    // UPDATED: Payload with type and metadata
+    const payload = {
+      account,
+      room_name: meeting_code,
+      type: "interview",
+      metadata: {
+        interview_id: sessionId,
+      },
+    };
+
+    this.logger.log(`Inviting agent with payload: ${JSON.stringify(payload)}`);
+
+    let data;
+
+    try {
       const response = await this.axiosClient
         .getInstance()
-        .post(AGENT_ENDPOINTS.CANCEL_DISPATCH, payload);
+        .post(AGENT_ENDPOINTS.CREATE_DISPATCH, payload);
 
-      this.logger.log(
-        `Agent removed, API response: ${JSON.stringify(response.data)}`
-      );
-
-      const sseKey = `${account.appid}-${meeting_code}`;
-      const existingSSE = this.sseConnections.get(sseKey);
-      if (existingSSE) {
-        existingSSE.close();
-        this.sseConnections.delete(sseKey);
-        this.logger.log(`🔌 Closed SSE connection for room ${meeting_code}`);
+      data = response.data;
+      this.logger.log(`Agent invited, API response: ${JSON.stringify(data)}`);
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        this.logger.error(
+          `Invalid response from API: ${error.response.status
+          } - ${JSON.stringify(error.response.data)}`
+        );
+      } else {
+        this.logger.error(`Error calling API: ${error}`);
       }
+      data = null;
+    }
 
-      // Clean up processed messages for this room
-      this.processedMessages.delete(meeting_code);
-
-      if (this.roomSessions.has(meeting_code)) {
-        const sessionId = this.roomSessions.get(meeting_code);
-        this.roomSessions.delete(meeting_code);
-        // Clear cache when removing session
-        this.sessionCache.delete(sessionId!);
-        this.logger.log(`🗑️ Cleared session ${sessionId} mapping for room ${meeting_code}`);
-      }
+    // NEW: Enable transcript after bot joins
+    try {
+      this.logger.log(`⏳ Waiting 2 seconds for bot to fully join...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      await this.enableTranscript(meeting_code);
+      this.logger.log(`✅ Transcript enabled for room ${meeting_code}`);
     } catch (error) {
       this.logger.error(
-        `Error removing agent: ${error}`,
+        `❌ Failed to enable transcript: ${error}`,
+        (error as Error)?.stack
+      );
+      // Continue anyway, maybe manual retry later
+    }
+
+    try {
+      const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
+      const sseUrl = buildStreamMessageUrl(
+        baseurl,
+        account.appid,
+        account.token,
+        meeting_code
+      );
+
+      this.createSSEConnection(sseUrl, meeting_code, account, client);
+    } catch (error) {
+      this.logger.error(
+        `Failed to setup SSE for room ${meeting_code}: ${error}`,
         (error as Error)?.stack
       );
     }
+  } catch (error) {
+    this.logger.error(
+      `Error inviting agent: ${error}`,
+      (error as Error)?.stack
+    );
+  }
+}
+
+  /**
+   * NEW: Check if message was already processed recently
+   */
+  private isDuplicateMessage(roomName: string, content: string): boolean {
+    const now = Date.now();
+    const roomMessages = this.processedMessages.get(roomName) || [];
+
+    // Clean up old messages beyond dedup window
+    const recentMessages = roomMessages.filter(
+      msg => (now - msg.timestamp) < this.MESSAGE_DEDUP_WINDOW_MS
+    );
+
+    // Check if this exact content was processed recently
+    const isDuplicate = recentMessages.some(msg => msg.content === content);
+
+    if (isDuplicate) {
+      return true;
+    }
+
+    // Add to processed messages
+    recentMessages.push({ content, timestamp: now });
+    this.processedMessages.set(roomName, recentMessages);
+
+    // Clean up old entries
+    this.cleanupProcessedMessages();
+
+    return false;
   }
 
-  async handleInviteAgent(
-    client: Nezon.Client,
-    event: AgentEvent,
-    account: Account
-  ): Promise<void> {
-    try {
-      const channel = await client.channels.fetch(
-        event.voice_channel_id ?? event.channel_id ?? ""
+  /**
+   * NEW: Clean up old processed messages
+   */
+  private cleanupProcessedMessages(): void {
+    const now = Date.now();
+    
+    for (const [roomName, messages] of this.processedMessages.entries()) {
+      const recentMessages = messages.filter(
+        msg => (now - msg.timestamp) < this.MESSAGE_DEDUP_WINDOW_MS
       );
-
-      if (!channel?.meeting_code) {
-        this.logger.error("Channel or meeting_code not found");
-        return;
+      
+      if (recentMessages.length === 0) {
+        this.processedMessages.delete(roomName);
+      } else {
+        this.processedMessages.set(roomName, recentMessages);
       }
-
-      const meeting_code = channel.meeting_code;
-
-      const payload = {
-        account,
-        room_name: meeting_code,
-      };
-
-      let data;
-
-      try {
-        const response = await this.axiosClient
-          .getInstance()
-          .post(AGENT_ENDPOINTS.CREATE_DISPATCH, payload);
-
-        data = response.data;
-        this.logger.log(`Agent invited, API response: ${JSON.stringify(data)}`);
-      } catch (error) {
-        if (axios.isAxiosError(error) && error.response) {
-          this.logger.error(
-            `Invalid response from API: ${error.response.status
-            } - ${JSON.stringify(error.response.data)}`
-          );
-        } else {
-          this.logger.error(`Error calling API: ${error}`);
-        }
-        data = null;
-      }
-
-      // NEW: Enable transcript after bot joins
-      try {
-        this.logger.log(`⏳ Waiting 2 seconds for bot to fully join...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        await this.enableTranscript(meeting_code);
-        this.logger.log(`✅ Transcript enabled for room ${meeting_code}`);
-      } catch (error) {
-        this.logger.error(
-          `❌ Failed to enable transcript: ${error}`,
-          (error as Error)?.stack
-        );
-        // Continue anyway, maybe manual retry later
-      }
-
-      try {
-        const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
-        const sseUrl = buildStreamMessageUrl(
-          baseurl,
-          account.appid,
-          account.token,
-          meeting_code
-        );
-        this.logger.log(`🔗 SSE URL: ${sseUrl}`);
-
-        const sseKey = `${account.appid}-${meeting_code}`;
-        const existingSSE = this.sseConnections.get(sseKey);
-        if (existingSSE) {
-          this.logger.log(`🔌 Closing existing SSE connection for room ${meeting_code}`);
-          existingSSE.close();
-          this.sseConnections.delete(sseKey);
-        }
-
-        this.createSSEConnection(sseUrl, meeting_code, account, client);
-      } catch (error) {
-        this.logger.error(
-          `Error setting up SSE: ${error}`,
-          (error as Error)?.stack
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error inviting agent: ${error}`,
-        (error as Error)?.stack
-      );
     }
   }
 

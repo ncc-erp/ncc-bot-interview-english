@@ -80,6 +80,13 @@ export class AgentService {
       const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
       const url = `${baseurl}${AGENT_ENDPOINTS.AGENT_CONTROL_TRANSCRIPT}`;
 
+      // NEW: Disable transcript before removing agent
+      try {
+        await this.disableTranscript(meeting_code);
+      } catch (error) {
+        this.logger.warn(`Failed to disable transcript, continuing with removal...`);
+      }
+
       const payload = {
         action: "enable",
         room_name: roomName,
@@ -297,6 +304,54 @@ async handleRemoveAgent(
     );
   }
 }
+
+  /**
+   * NEW: Check if message was already processed recently
+   */
+  private isDuplicateMessage(roomName: string, content: string): boolean {
+    const now = Date.now();
+    const roomMessages = this.processedMessages.get(roomName) || [];
+
+    // Clean up old messages beyond dedup window
+    const recentMessages = roomMessages.filter(
+      msg => (now - msg.timestamp) < this.MESSAGE_DEDUP_WINDOW_MS
+    );
+
+    // Check if this exact content was processed recently
+    const isDuplicate = recentMessages.some(msg => msg.content === content);
+
+    if (isDuplicate) {
+      return true;
+    }
+
+    // Add to processed messages
+    recentMessages.push({ content, timestamp: now });
+    this.processedMessages.set(roomName, recentMessages);
+
+    // Clean up old entries
+    this.cleanupProcessedMessages();
+
+    return false;
+  }
+
+  /**
+   * NEW: Clean up old processed messages
+   */
+  private cleanupProcessedMessages(): void {
+    const now = Date.now();
+    
+    for (const [roomName, messages] of this.processedMessages.entries()) {
+      const recentMessages = messages.filter(
+        msg => (now - msg.timestamp) < this.MESSAGE_DEDUP_WINDOW_MS
+      );
+      
+      if (recentMessages.length === 0) {
+        this.processedMessages.delete(roomName);
+      } else {
+        this.processedMessages.set(roomName, recentMessages);
+      }
+    }
+  }
 
   /**
    * NEW: Check if message was already processed recently

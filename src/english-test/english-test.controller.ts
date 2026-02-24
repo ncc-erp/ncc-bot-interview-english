@@ -268,6 +268,8 @@ ${nextQuestion}
     if (channel) {
       await channel.send({ t: responseMessage });
     }
+
+    this.startAnswerTimeout(session.id, client, channelId, session.userId);
   }
 
   @Component({ pattern: '/interview/start/:user_id' })

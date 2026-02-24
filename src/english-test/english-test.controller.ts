@@ -127,6 +127,7 @@ export class EnglishTestController {
       // Store client reference for later use
       if (!this.nezonClient) {
         this.nezonClient = client;
+        this.chatService.setNezonClient(client);
         this.logger.log('✅ Nezon client initialized');
       }
 
@@ -278,6 +279,13 @@ ${nextQuestion}
     @Client() client: Nezon.Client,
   ) {
     try {
+      // Ensure ChatService has the client reference
+      if (!this.nezonClient) {
+        this.nezonClient = client;
+        this.chatService.setNezonClient(client);
+        this.logger.log('✅ Nezon client initialized from onStartInterview');
+      }
+
       if (!userId) {
         await message.reply(SmartMessage.text('❌ Invalid request'));
         return;
@@ -441,13 +449,13 @@ ${nextQuestion}
               )
               .addButton(
                   new ButtonBuilder()
-                      .setCustomId(`/interview/confirmCompletedAnswer/${userId}`)
+                      .setCustomId(`/interview/confirmCompleted/${userId}`)
                       .setLabel('Yes ')
                       .setStyle(ButtonStyle.Success)
               )
               .addButton(
                   new ButtonBuilder()
-                      .setCustomId(`/interview/confirmNotCompletedAnswer/${userId}`)
+                      .setCustomId(`/interview/confirmNotCompleted/${userId}`)
                       .setLabel('No')
                       .setStyle(ButtonStyle.Danger)
               )
@@ -514,6 +522,7 @@ ${nextQuestion}
         }
       } else if (session.status === SessionStatus.COMPLETED) {
         this.logger.log(`✅ Session ${session.id} kept as COMPLETED`);
+        return;
       } else {
         this.logger.log(`ℹ️ Session ${session.id} status: ${session.status} (no action)`);
       }
@@ -678,6 +687,9 @@ ${nextQuestion}
           await channel.send({ t: completionMessage });
         }
 
+        // Auto kick bot so agent starts generating audio
+        this.logger.log(`🤖 Auto-kicking bot from room ${session.roomName} after interview complete...`);
+        await this.kickBotFromRoom(client, payload.channel_id, session.roomName, session.id);
         return;
       }
 

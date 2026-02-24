@@ -39,6 +39,8 @@ import { RecordAudioModule } from "./record-audio/record-audio.module";
         botId: configService.get<string>("MEZON_BOT_ID")!,
         host: "dev-mezon.nccsoft.vn",
         port: "8088",
+        useSSL: configService.get<boolean>('MEZON_USE_SSL') ?? true,
+        timeout: configService.get<number>('MEZON_TIMEOUT') || 7000,
         mmnApiUrl: "https://dev-mmn.nccsoft.vn/mmn-api/",
         zkApiUrl: "https://dev-mmn.nccsoft.vn/zk-api/",
       }),

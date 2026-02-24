@@ -15,8 +15,10 @@ export class ChatService {
    * Set Nezon client instance (called from controller on init)
    */
   setNezonClient(client: Nezon.Client): void {
-    this.nezonClient = client;
-    this.logger.log('✅ Nezon client set in ChatService');
+    if (!this.nezonClient) {
+      this.nezonClient = client;
+      this.logger.log('✅ Nezon client set in ChatService');
+    }
   }
 
   /**
@@ -74,7 +76,7 @@ export class ChatService {
     }
     
     message += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-    message += `💡 Click on the link(s) above to listen to your interview recording.`;
+    message += `💡 Copy on the link(s) above to listen to your interview recording.`;
 
     return message;
   }

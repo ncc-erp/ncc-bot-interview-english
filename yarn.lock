@@ -1025,16 +1025,16 @@
   resolved "https://registry.yarnpkg.com/@msgpackr-extract/msgpackr-extract-win32-x64/-/msgpackr-extract-win32-x64-3.0.3.tgz#0aa5502d547b57abfc4ac492de68e2006e417242"
   integrity sha512-x0fWaQtYp4E6sktbsdAqnehxDgEc/VwM7uLsRCYWaiGu0ykYdZPiS8zCWdnjHwyiumousxfBm4SO31eXqwEZhQ==
 
-"@n0xgg04/nezon@^1.4.0":
-  version "1.4.0"
-  resolved "https://registry.yarnpkg.com/@n0xgg04/nezon/-/nezon-1.4.0.tgz#aa22ef3aaea8eb8f67cefe0bf4cb3201db9293c9"
-  integrity sha512-FhbMyBApryPE2dYiA6LruOMIhb3J828V65g5ySnt3op/HOOEpLhgpB4qIrcjLpmNwJyGPsz0MyPz8SpuCAsvlw==
+"@n0xgg04/nezon@^1.4.1":
+  version "1.4.1"
+  resolved "https://registry.yarnpkg.com/@n0xgg04/nezon/-/nezon-1.4.1.tgz#81295e2ae1b362051930cd4888b09d0acc8c94ff"
+  integrity sha512-JAC9PLZTY3JlDkAxqJSLU2C8fsNFtdTnfig1obufQh7F8htgf6uRr7YvM2KenC9kaANiV89ESO2vNbB58dpAfQ==
   dependencies:
     "@nestjs/common" "^10.0.0"
     "@nestjs/core" "^10.0.0"
     "@nestjs/event-emitter" "^3.0.1"
     "@nestjs/platform-express" "^10.0.0"
-    mezon-sdk "2.8.40"
+    mezon-sdk "2.8.42"
     reflect-metadata "^0.1.13"
     rxjs "^7.8.1"
 
@@ -6184,10 +6184,10 @@ methods@^1.1.2, methods@~1.1.2:
   resolved "https://registry.yarnpkg.com/methods/-/methods-1.1.2.tgz#5529a4d67654134edcc5266656835b0f851afcee"
   integrity sha512-iclAHeNqNm68zFtnZ0e+1L2yUIdvzNoauKU4WBA3VvH/vPFieF7qfRlwUZU+DA9P9bPXIS90ulxoUoCH23sV2w==
 
-mezon-sdk@2.8.40, mezon-sdk@^2.8.40:
-  version "2.8.40"
-  resolved "https://registry.yarnpkg.com/mezon-sdk/-/mezon-sdk-2.8.40.tgz#c18cb7c4ce9983b12f0c674892c1e3074be344a2"
-  integrity sha512-MtYMoqoyxRxkECR7+XYms1kWFO2IqHXjGB7qICDzdHxieGqBYtjDICFfWcxD/KoztlWIaacVqhZrV3fz54KK6Q==
+mezon-sdk@2.8.42, mezon-sdk@^2.8.42:
+  version "2.8.42"
+  resolved "https://registry.yarnpkg.com/mezon-sdk/-/mezon-sdk-2.8.42.tgz#95a76ca182c59bd2af927b9202f0d620962aff12"
+  integrity sha512-RV9K7Tuil84zMFh3ZemEBgkfbzOXsKoI3grkKlEiYYz+31Gvuvc1sunXTPS26tht00C3uQM9sPl2mnaS25JPIg==
   dependencies:
     "@types/ws" "^8.5.12"
     base64-arraybuffer "^1.0.2"

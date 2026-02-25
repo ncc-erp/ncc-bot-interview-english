@@ -566,6 +566,7 @@ Type your answer or speak in the voice room...`;
       this.logger.error(`Channel ${channelId} not found`);
     }
   }
+  
   /**
    * NEW: Link existing session to room (bot already in room)
    */

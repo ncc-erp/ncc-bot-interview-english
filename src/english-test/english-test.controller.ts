@@ -775,8 +775,7 @@ ${nextQuestion}
         SmartMessage.text(
           '✅ **Session ended!**\n\n' +
           '🎙️ Your recording is being processed...\n' +
-          '📩 The audio link will be sent here automatically in a few minutes.\n\n' +
-          '_You can leave the voice channel now._'
+          '📩 The audio link will be sent here automatically in a few minutes.'
         )
       );
 

@@ -313,35 +313,6 @@ export class AgentService {
   }
 
   /**
-   * NEW: Check if message was already processed recently
-   */
-  private isDuplicateMessage(roomName: string, content: string): boolean {
-    const now = Date.now();
-    const roomMessages = this.processedMessages.get(roomName) || [];
-
-    // Clean up old messages beyond dedup window
-    const recentMessages = roomMessages.filter(
-      msg => (now - msg.timestamp) < this.MESSAGE_DEDUP_WINDOW_MS
-    );
-
-    // Check if this exact content was processed recently
-    const isDuplicate = recentMessages.some(msg => msg.content === content);
-
-    if (isDuplicate) {
-      return true;
-    }
-
-    // Add to processed messages
-    recentMessages.push({ content, timestamp: now });
-    this.processedMessages.set(roomName, recentMessages);
-
-    // Clean up old entries
-    this.cleanupProcessedMessages();
-
-    return false;
-  }
-
-  /**
    * NEW: Clean up old processed messages
    */
   private cleanupProcessedMessages(): void {
@@ -542,7 +513,7 @@ export class AgentService {
       this.clearSessionCache(sessionId);
 
       // Send TTS completion
-      const spokenCompletion = "Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session";
+      const spokenCompletion = 'Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session';
 
       // Save bot's completion message
       await this.sessionService.addMessage(
@@ -565,7 +536,7 @@ export class AgentService {
               .setColor('#00cc66')
               .setTitle('🎉 Interview Complete!')
               .setDescription(
-                `${spokenCompletion}\n\n` +
+                `Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session\n\n` +
                 `📝 Template: ${session.template.name}\n` +
                 `❓ Questions Answered: ${session.template.numberOfQuestions}\n\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━\n\n` +

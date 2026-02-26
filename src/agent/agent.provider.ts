@@ -273,6 +273,16 @@ export class AgentService {
         data = null;
       }
 
+      const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
+      const sseUrl = buildStreamMessageUrl(
+        baseurl,
+        account.appid,
+        account.token,
+        meeting_code
+      );
+
+      this.createSSEConnection(sseUrl, meeting_code, account, client);
+
       // NEW: Enable transcript after bot joins
       try {
         this.logger.log(`⏳ Waiting 2 seconds for bot to fully join...`);
@@ -287,23 +297,7 @@ export class AgentService {
         );
         // Continue anyway, maybe manual retry later
       }
-
-      try {
-        const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
-        const sseUrl = buildStreamMessageUrl(
-          baseurl,
-          account.appid,
-          account.token,
-          meeting_code
-        );
-
-        this.createSSEConnection(sseUrl, meeting_code, account, client);
-      } catch (error) {
-        this.logger.error(
-          `Failed to setup SSE for room ${meeting_code}: ${error}`,
-          (error as Error)?.stack
-        );
-      }
+      
     } catch (error) {
       this.logger.error(
         `Error inviting agent: ${error}`,
@@ -513,7 +507,7 @@ export class AgentService {
       this.clearSessionCache(sessionId);
 
       // Send TTS completion
-      const spokenCompletion = 'Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session';
+      const spokenCompletion = `Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session`;
 
       // Save bot's completion message
       await this.sessionService.addMessage(
@@ -528,8 +522,8 @@ export class AgentService {
       await this.sendTTS(session.roomName, spokenCompletion);
 
       const channel = client.channels.get(channelId);
-      if (!channel) this.logger.error(`Channel ${channelId} not found`);
-      await channel.send(
+      if (channel){
+        await channel.send(
         SmartMessage.build()
           .addEmbed(
             new EmbedBuilder()
@@ -551,6 +545,9 @@ export class AgentService {
           )
           .toContent()
       );
+      }else{
+        this.logger.error(`Channel ${channelId} not found`);
+      }    
       return;
     }
 

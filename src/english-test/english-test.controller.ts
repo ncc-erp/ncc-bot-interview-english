@@ -365,12 +365,7 @@ ${nextQuestion}
           session.id, // NEW: Pass sessionId
         );
 
-        this.logger.log(`✅ Bot invite request sent to room ${roomName}`);
-
-        // UPDATED: Wait longer for bot to join AND transcript to be enabled
-        this.logger.log(`⏳ Waiting 5 seconds for bot to join and transcript to be enabled...`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        this.logger.log(`✅ Bot should be ready with transcript enabled`);
+        this.logger.log(`✅ Bot ready - SSE connected and transcript enabled for room ${roomName}`);
 
       } else {
         this.logger.log(`✅ Bot already in room ${roomName}, enabling transcript...`);

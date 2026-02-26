@@ -7,13 +7,14 @@ import {
   Logger,
   Get,
   Param,
-  Res,
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InterviewSessionService } from '../interviewer/interview-session.service';
 import { UploadAudioDto } from '../record-audio/upload-audio.dto';
 import { ChatService } from '../interviewer/chat.service';
+import { mergeRoomAudio, parseTracksWithOffset } from '../record-audio/merged-audio.util';
+import { MinioService } from '../record-audio/minio.service';
 
 @Controller('api/interview')
 export class InterviewAudioController {
@@ -23,6 +24,7 @@ export class InterviewAudioController {
     private readonly sessionService: InterviewSessionService,
     private readonly chatService: ChatService,
     private readonly configService: ConfigService,
+    private readonly minioService: MinioService,
   ) { }
 
   /**
@@ -63,59 +65,61 @@ export class InterviewAudioController {
       const minioEndpoint = this.configService.get<string>('MINIO_ENDPOINT');
       const minioBucket = this.configService.get<string>('MINIO_BUCKET');
 
-      // Build full URLs from filenames
-      const urls = trackEntries.map(([timestamp, filename]) => {
-        // Remove leading slash if present
-        const cleanFilename = filename.startsWith('/') ? filename.slice(1) : filename;
-        return `${minioEndpoint}/${minioBucket}/${cleanFilename}`;
-      });
+      // 1. Parse tracks with nanosecond offsets → TrackInput[]
+      const tracksWithOffset = parseTracksWithOffset(
+        dto.tracks,
+        minioEndpoint,
+        minioBucket,
+      );
+
+      const urls = tracksWithOffset.map((t) => t.url);
 
       this.logger.log(
         `Received ${urls.length} audio file(s) for session ${dto.interview_id}\n` +
         `Tracks: ${JSON.stringify(dto.tracks, null, 2)}\n` +
-        `Generated URLs: ${JSON.stringify(urls, null, 2)}`
+        `Parsed with offsets: ${JSON.stringify(tracksWithOffset, null, 2)}`
       );
 
-      // 1. Get session info first
+      // 2. Get session info
       const session = await this.sessionService.getSessionById(dto.interview_id);
-
       if (!session) {
-        return {
-          success: false,
-          message: `Session ${dto.interview_id} not found`,
-        };
+        return { success: false, message: `Session ${dto.interview_id} not found` };
       }
 
-      // 2. Save audio URLs to database
-      const updatedSession = await this.sessionService.addAudioUrls(
-        dto.interview_id,
-        urls,
-      );
+      // 3. Save individual track URLs to DB
+      await this.sessionService.addAudioUrls(dto.interview_id, urls);
+      this.logger.log(`✅ Saved ${urls.length} track URL(s) to session ${dto.interview_id}`);
 
-      this.logger.log(
-        `✅ Successfully saved ${urls.length} audio URL(s) for session ${dto.interview_id}`
-      );
+      // 4. Merge tracks into single file
+      let mergedUrl: string | null = null;
+      try {
+        this.logger.log(`🎵 Merging ${tracksWithOffset.length} tracks...`);
+        const mergedPath = await mergeRoomAudio(tracksWithOffset);
+        this.logger.log(`✅ Merged audio at: ${mergedPath}`);
 
-      // 3. Send audio links to chat room
+        mergedUrl = await this.minioService.uploadFile(mergedPath);
+        this.logger.log(`📦 Merged file uploaded: ${mergedUrl}`);
+      } catch (mergeError) {
+        this.logger.error(`❌ Failed to merge audio, falling back to individual tracks:`, mergeError);
+      }
+
+      // 5. Send to chat: merged URL if available, else individual tracks
+      const urlsToSend = mergedUrl ? [mergedUrl] : urls;
       await this.chatService.sendAudioLinksToChat(
         session.channelId,
         session.template.name,
-        urls,
+        urlsToSend,
       );
-
-      this.logger.log(
-        `📤 Sent audio links to chat channel ${session.channelId}`
-      );
+      this.logger.log(`📤 Sent audio link(s) to channel ${session.channelId}`);
 
       return {
         success: true,
-        message: 'Audio URLs saved and sent to chat successfully',
+        message: 'Audio processed and sent to chat successfully',
         data: {
-          sessionId: updatedSession.id,
-          totalAudioFiles: updatedSession.audioFilePaths.length,
-          newFiles: urls.length,
-          channelId: session.channelId,
+          sessionId: session.id,
           tracksReceived: trackEntries.length,
+          merged: !!mergedUrl,
+          channelId: session.channelId,
         },
       };
     } catch (error) {

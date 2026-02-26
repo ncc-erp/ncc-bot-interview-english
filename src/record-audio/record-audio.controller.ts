@@ -7,6 +7,7 @@ import {
   Logger,
   Get,
   Param,
+  Res,
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

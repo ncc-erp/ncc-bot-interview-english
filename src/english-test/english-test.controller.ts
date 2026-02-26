@@ -408,11 +408,9 @@ ${nextQuestion}
           `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
           `**Interview Details:**\n` +
           `📝 Template: **${template.name}**\n` +
-          `📊 Level: ${template.level}\n` +
-          `❓ Questions: ${template.numberOfQuestions}\n` +
           `🆔 Session ID: ${session.id}\n\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-          `**💬 Type/Speak your first message to begin the interview!**\n` +
+          `**💬 Speak your first message to begin the interview!**\n` +
           `(e.g., "Hello", "I'm ready", etc.)`
         )
       );
@@ -463,7 +461,7 @@ ${nextQuestion}
               .toContent()
       );
       this.answerTimeouts.delete(sessionId);
-    }, 10_000);
+    }, 3_000);
     this.answerTimeouts.set(sessionId, timeout);
   }
 
@@ -745,6 +743,47 @@ ${nextQuestion}
 
     } catch (error) {
       this.logger.error('Error in confirmNotCompleted:', error);
+    }
+  }
+
+  /**
+   * User clicks "Finish & Get Recording" after interview complete
+   * → kick bot → agent generates audio → POST /api/interview/audio → send links to chat
+   */
+  @Component({ pattern: '/interview/finish/:session_id' })
+  async onFinishInterview(
+    @ComponentParams('session_id') sessionId: string,
+    @ChannelMessagePayload() payload: Nezon.ChannelMessage,
+    @AutoContext() [message]: Nezon.AutoContext,
+    @Client() client: Nezon.Client,
+  ) {
+    try {
+      await message.update(
+        SmartMessage.text('⏳ **Ending session...** Please wait while we process your recording.')
+      );
+
+      const session = await this.sessionService.getSessionById(sessionId);
+      if (!session) {
+        await message.update(SmartMessage.text('❌ Session not found.'));
+        return;
+      }
+
+      this.logger.log(`🤖 User confirmed finish, kicking bot from room ${session.roomName}...`);
+      await this.kickBotFromRoom(client, payload.channel_id, session.roomName, session.id);
+
+      await message.update(
+        SmartMessage.text(
+          '✅ **Session ended!**\n\n' +
+          '🎙️ Your recording is being processed...\n' +
+          '📩 The audio link will be sent here automatically in a few minutes.\n\n' +
+          '_You can leave the voice channel now._'
+        )
+      );
+
+      this.logger.log(`✅ Finish confirmed for session ${sessionId}`);
+    } catch (error) {
+      this.logger.error('Error in onFinishInterview:', error);
+      await message.update(SmartMessage.text('❌ Something went wrong. Please try again.'));
     }
   }
 }

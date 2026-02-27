@@ -37,7 +37,7 @@ import { RecordAudioModule } from "./record-audio/record-audio.module";
       useFactory: (configService: ConfigService) => ({
         token: configService.get<string>("MEZON_TOKEN")!,
         botId: configService.get<string>("MEZON_BOT_ID")!,
-        host: configService.get<string>("MEZON_HOST") || "https://gw.mezon.ai",
+        host: configService.get<string>("MEZON_HOST") || "gw.mezon.ai",
         port: configService.get<string>("MEZON_PORT") || "443",
         useSSL: configService.get<boolean>('MEZON_USE_SSL') ?? true,
         timeout: configService.get<number>('MEZON_TIMEOUT') || 7000,

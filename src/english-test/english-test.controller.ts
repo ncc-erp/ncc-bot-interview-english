@@ -118,62 +118,62 @@ export class EnglishTestController {
     }
   }
 
-  @On(Events.ChannelMessage)
-  async onMessage(
-    @EventPayload() event: Nezon.ChannelMessage,
-    @Client() client: Nezon.Client,
-  ) {
-    try {
-      // Store client reference for later use
-      if (!this.nezonClient) {
-        this.nezonClient = client;
-        this.chatService.setNezonClient(client);
-        this.logger.log('✅ Nezon client initialized');
-      }
+  // @On(Events.ChannelMessage)
+  // async onMessage(
+  //   @EventPayload() event: Nezon.ChannelMessage,
+  //   @Client() client: Nezon.Client,
+  // ) {
+  //   try {
+  //     // Store client reference for later use
+  //     if (!this.nezonClient) {
+  //       this.nezonClient = client;
+  //       this.chatService.setNezonClient(client);
+  //       this.logger.log('✅ Nezon client initialized');
+  //     }
 
-      this.logger.log('Received channel message event');
+  //     this.logger.log('Received channel message event');
 
-      if (!event.content?.t || event.content.t.startsWith('*')) {
-        this.logger.log('Ignoring command or empty message');
-        return;
-      }
+  //     if (!event.content?.t || event.content.t.startsWith('*')) {
+  //       this.logger.log('Ignoring command or empty message');
+  //       return;
+  //     }
 
-      const userId = event.sender_id;
-      const channelId = event.channel_id;
-      const userMessage = event.content.t;
+  //     const userId = event.sender_id;
+  //     const channelId = event.channel_id;
+  //     const userMessage = event.content.t;
 
-      this.logger.log(`Message from user ${userId} in channel ${channelId}: ${userMessage}`);
+  //     this.logger.log(`Message from user ${userId} in channel ${channelId}: ${userMessage}`);
 
-      const session = await this.sessionService.getActiveSession(userId, channelId);
+  //     const session = await this.sessionService.getActiveSession(userId, channelId);
 
-      if (!session) {
-        this.logger.log('No active session found for this user/channel');
-        return;
-      }
+  //     if (!session) {
+  //       this.logger.log('No active session found for this user/channel');
+  //       return;
+  //     }
 
-      this.logger.log(`Processing answer for session ${session.id}`);
+  //     this.logger.log(`Processing answer for session ${session.id}`);
 
-      await this.sessionService.addMessage(
-        session.id,
-        MessageRole.USER,
-        userMessage,
-        MessageType.TEXT,
-        session.currentQuestionIndex,
-      );
+  //     await this.sessionService.addMessage(
+  //       session.id,
+  //       MessageRole.USER,
+  //       userMessage,
+  //       MessageType.TEXT,
+  //       session.currentQuestionIndex,
+  //     );
 
-      await this.processUserAnswer(session, userMessage, client, channelId);
+  //     await this.processUserAnswer(session, userMessage, client, channelId);
 
-    } catch (error) {
-      this.logger.error('Error processing message:', error);
+  //   } catch (error) {
+  //     this.logger.error('Error processing message:', error);
 
-      const channel = client.channels.get(event.channel_id);
-      if (channel) {
-        await channel.send({
-          t: '❌ Sorry, something went wrong. Please try again or use *cancel to restart.'
-        });
-      }
-    }
-  }
+  //     const channel = client.channels.get(event.channel_id);
+  //     if (channel) {
+  //       await channel.send({
+  //         t: '❌ Sorry, something went wrong. Please try again or use *cancel to restart.'
+  //       });
+  //     }
+  //   }
+  // }
 
   async processUserAnswer(
     session: any,
@@ -495,7 +495,7 @@ ${nextQuestion}
       if (!session) {
         this.logger.log(`No active session found for user ${userId} in room ${roomName}`);
 
-        await this.kickBotFromRoom(client, voiceChannelId, roomName, session.id);
+        await this.kickBotFromRoom(client, voiceChannelId, roomName);
         return;
       }
 
@@ -531,7 +531,7 @@ ${nextQuestion}
     client: Nezon.Client,
     channelId: string,
     roomName: string,
-    sessionId: string,
+    sessionId?: string,
   ): Promise<void> {
     try {
       this.logger.log(`🤖 Kicking bot from room ${roomName}...`);

@@ -460,72 +460,72 @@ ${nextQuestion}
     this.answerTimeouts.set(sessionId, timeout);
   }
 
-  @On(Events.VoiceLeavedEvent)
-  async onVoiceLeaved(
-    @EventPayload() event: Nezon.VoiceLeavedPayload,
-    @Client() client: Nezon.Client,
-  ) {
-    try {
-      this.logger.log(`👋 User left voice channel: ${event.voice_channel_id}`);
+  // @On(Events.VoiceLeavedEvent)
+  // async onVoiceLeaved(
+  //   @EventPayload() event: Nezon.VoiceLeavedPayload,
+  //   @Client() client: Nezon.Client,
+  // ) {
+  //   try {
+  //     this.logger.log(`👋 User left voice channel: ${event.voice_channel_id}`);
 
-      const userId = event.voice_user_id;
-      const voiceChannelId = event.voice_channel_id;
+  //     const userId = event.voice_user_id;
+  //     const voiceChannelId = event.voice_channel_id;
 
-      if (!userId || !voiceChannelId) {
-        this.logger.warn('Missing userId or voiceChannelId in leave event');
-        return;
-      }
+  //     if (!userId || !voiceChannelId) {
+  //       this.logger.warn('Missing userId or voiceChannelId in leave event');
+  //       return;
+  //     }
 
-      const channel = await client.channels.fetch(voiceChannelId);
+  //     const channel = await client.channels.fetch(voiceChannelId);
 
-      if (!channel?.meeting_code) {
-        this.logger.warn('Channel or meeting_code not found');
-        return;
-      }
+  //     if (!channel?.meeting_code) {
+  //       this.logger.warn('Channel or meeting_code not found');
+  //       return;
+  //     }
 
-      const roomName = channel.meeting_code;
+  //     const roomName = channel.meeting_code;
 
-      this.logger.log(`👤 User ${userId} left room ${roomName}`);
+  //     this.logger.log(`👤 User ${userId} left room ${roomName}`);
 
-      const session = await this.sessionService.findSessionByUserAndRoom(
-        userId,
-        roomName,
-      );
+  //     const session = await this.sessionService.findSessionByUserAndRoom(
+  //       userId,
+  //       roomName,
+  //     );
 
-      if (!session) {
-        this.logger.log(`No active session found for user ${userId} in room ${roomName}`);
+  //     if (!session) {
+  //       this.logger.log(`No active session found for user ${userId} in room ${roomName}`);
 
-        await this.kickBotFromRoom(client, voiceChannelId, roomName);
-        return;
-      }
+  //       await this.kickBotFromRoom(client, voiceChannelId, roomName);
+  //       return;
+  //     }
 
-      this.logger.log(`📋 Found session ${session.id} with status: ${session.status}`);
+  //     this.logger.log(`📋 Found session ${session.id} with status: ${session.status}`);
 
-      if (session.status === SessionStatus.IN_PROGRESS) {
-        await this.sessionService.cancelSession2(session.id);
-        this.logger.log(`❌ Session ${session.id} cancelled (was in progress)`);
+  //     if (session.status === SessionStatus.IN_PROGRESS) {
+  //       await this.sessionService.cancelSession2(session.id);
+  //       this.logger.log(`❌ Session ${session.id} cancelled (was in progress)`);
 
-        const textChannel = client.channels.get(session.channelId);
-        if (textChannel) {
-          await textChannel.send({
-            t: '👋 **Interview Cancelled**\n\n' +
-              'You left the voice channel.\n' +
-              'Session has been cancelled.\n\n' +
-              'Use `*start` to begin a new interview.',
-          });
-        }
-      } else if (session.status === SessionStatus.COMPLETED) {
-        this.logger.log(`✅ Session ${session.id} kept as COMPLETED`);
-        return;
-      } else {
-        this.logger.log(`ℹ️ Session ${session.id} status: ${session.status} (no action)`);
-      }
-      await this.kickBotFromRoom(client, voiceChannelId, roomName, session.id);
+  //       const textChannel = client.channels.get(session.channelId);
+  //       if (textChannel) {
+  //         await textChannel.send({
+  //           t: '👋 **Interview Cancelled**\n\n' +
+  //             'You left the voice channel.\n' +
+  //             'Session has been cancelled.\n\n' +
+  //             'Use `*start` to begin a new interview.',
+  //         });
+  //       }
+  //     } else if (session.status === SessionStatus.COMPLETED) {
+  //       this.logger.log(`✅ Session ${session.id} kept as COMPLETED`);
+  //       return;
+  //     } else {
+  //       this.logger.log(`ℹ️ Session ${session.id} status: ${session.status} (no action)`);
+  //     }
+  //     await this.kickBotFromRoom(client, voiceChannelId, roomName, session.id);
 
-    } catch (error) {
-      this.logger.error('❌ Error handling voice leave event:', error);
-    }
-  }
+  //   } catch (error) {
+  //     this.logger.error('❌ Error handling voice leave event:', error);
+  //   }
+  // }
 
   private async kickBotFromRoom(
     client: Nezon.Client,

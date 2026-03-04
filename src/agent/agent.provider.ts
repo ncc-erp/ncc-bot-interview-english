@@ -718,4 +718,110 @@ Type your answer or speak in the voice room...`;
 
     this.sseConnections.set(sseKey, es);
   }
+  
+  // ─────────────────────────────────────────────
+  // External Meeting Methods (no Nezon client needed)
+  // ─────────────────────────────────────────────
+
+  /**
+   * Invite agent to external meeting room.
+   * Used by OrchestratorSSEService — no Nezon.Client available.
+   */
+  async handleInviteAgentExternal(roomName: string, sessionId: string): Promise<void> {
+    const account: Account = {
+      appid: this.configService.get<string>('MEZON_BOT_ID')!,
+      token: this.configService.get<string>('MEZON_TOKEN')!,
+    };
+
+    const payload = {
+      account,
+      room_name: roomName,
+      type: 'interview',
+      metadata: { interview_id: sessionId },
+    };
+
+    this.logger.log(`[External] Inviting agent to room ${roomName}...`);
+
+    try {
+      const response = await this.axiosClient.getInstance().post(AGENT_ENDPOINTS.CREATE_DISPATCH, payload);
+      this.logger.log(`[External] Agent invited: ${JSON.stringify(response.data)}`);
+    } catch (error) {
+      this.logger.error(`[External] Failed to invite agent:`, error);
+      throw error;
+    }
+
+    // Link session to room in memory
+    this.roomSessions.set(roomName, sessionId);
+
+    // Wait 2s for agent to fully join then enable transcript
+    this.logger.log(`[External] Waiting 2s for agent to join room ${roomName}...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    try {
+      await this.enableTranscript(roomName);
+      this.logger.log(`[External] ✅ Transcript enabled for room ${roomName}`);
+    } catch (error) {
+      this.logger.error(`[External] Failed to enable transcript:`, error);
+      // Continue anyway
+    }
+  }
+
+  /**
+   * Remove agent from external meeting room.
+   * Used by OrchestratorSSEService.
+   */
+  async handleRemoveAgentExternal(roomName: string, sessionId: string): Promise<void> {
+    const account: Account = {
+      appid: this.configService.get<string>('MEZON_BOT_ID')!,
+      token: this.configService.get<string>('MEZON_TOKEN')!,
+    };
+
+    try {
+      await this.disableTranscript(roomName);
+    } catch { /* ignore */ }
+
+    const payload = {
+      account,
+      room_name: roomName,
+      type: 'interview',
+      metadata: { interview_id: sessionId },
+    };
+
+    try {
+      const response = await this.axiosClient.getInstance().post(AGENT_ENDPOINTS.CANCEL_DISPATCH, payload);
+      this.logger.log(`[External] Agent removed from room ${roomName}: ${JSON.stringify(response.data)}`);
+    } catch (error) {
+      this.logger.error(`[External] Failed to remove agent:`, error);
+    }
+
+    // Cleanup all room state
+    const sseKey = `${account.appid}-${roomName}`;
+    this.sseConnections.get(sseKey)?.close();
+    this.sseConnections.delete(sseKey);
+    this.roomSessions.delete(roomName);
+    this.pendingTranscripts.delete(roomName);
+    this.processedMessages.delete(roomName);
+    const timer = this.answerDebounceTimers.get(roomName);
+    if (timer) { clearTimeout(timer); this.answerDebounceTimers.delete(roomName); }
+    this.logger.log(`[External] Cleaned up state for room ${roomName}`);
+  }
+
+  /**
+   * Called by OrchestratorSSEService when room_record_done metadata event fires.
+   * Emits to Bull queue for async processing (merge + upload).
+   */
+  handleRecordDone(
+    sessionId: string,
+    roomName: string,
+    fileResults: {
+      participant_identity: string;
+      filename: string;
+      started_at_ns: string;
+      ended_at_ns: string;
+    }[],
+  ): void {
+    this.logger.log(`[RecordDone] Queuing merge for session ${sessionId}, ${fileResults.length} tracks`);
+    this.ttsQueue.add('record-done', { sessionId, roomName, fileResults });
+  }
+  
 }

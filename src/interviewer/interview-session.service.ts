@@ -368,6 +368,20 @@ export class InterviewSessionService {
     return message;
   }
 
+  /**
+   * Find active/completed session by room name (for external meeting mapping)
+   */
+  async getSessionByRoomName(roomName: string): Promise<InterviewSession | null> {
+    return this.sessionRepo.findOne({
+      where: {
+        roomName,
+        status: In([SessionStatus.IN_PROGRESS, SessionStatus.COMPLETED, SessionStatus.PENDING]),
+      },
+      relations: ['template'],
+      order: { startedAt: 'DESC' },
+    });
+  }
+
   async findSessionByUserAndRoom(
     userId: string,
     roomName: string,

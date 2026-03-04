@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Nezon } from '@n0xgg04/nezon';
+import { AxiosClient } from '@/shared/lib/axios-client';
 
 @Injectable()
 export class ChatService {
@@ -9,16 +10,15 @@ export class ChatService {
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly axiosClient: AxiosClient,
   ) {}
 
   /**
    * Set Nezon client instance (called from controller on init)
    */
   setNezonClient(client: Nezon.Client): void {
-    if (!this.nezonClient) {
-      this.nezonClient = client;
-      this.logger.log('✅ Nezon client set in ChatService');
-    }
+    this.nezonClient = client;
+    this.logger.log('✅ Nezon client set in ChatService');
   }
 
   /**
@@ -76,7 +76,7 @@ export class ChatService {
     }
     
     message += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-    message += `💡 Copy on the link(s) above to listen to your interview recording.`;
+    message += `💡 Click on the link(s) above to listen to your interview recording.`;
 
     return message;
   }
@@ -113,5 +113,46 @@ export class ChatService {
     await channel.send({ 
       t: `━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Click on the links above to listen.` 
     });
+  }
+
+  /**
+   * Send message to external meeting room chat via Agent API
+   */
+  async sendExternalChatMessage(roomName: string, text: string): Promise<void> {
+    const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
+    const appid = this.configService.get<string>('MEZON_BOT_ID')!;
+    const token = this.configService.get<string>('MEZON_TOKEN')!;
+
+    try {
+      await this.axiosClient.getInstance().post(
+        `${baseUrl}/api/chat_external/send_message`,
+        { account: { appid, token }, room_name: roomName, text },
+      );
+      this.logger.log(`✅ Sent external chat message to room ${roomName}`);
+    } catch (error) {
+      this.logger.error(`Failed to send external chat message to room ${roomName}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send audio links to external meeting room chat
+   */
+  async sendAudioLinksToChatExternal(
+    roomName: string,
+    templateName: string,
+    audioUrls: string[],
+  ): Promise<void> {
+    const lines = [
+      `🎧 **Interview Recording Ready!**`,
+      `Template: ${templateName}`,
+      `Files: ${audioUrls.length}`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      ...audioUrls.map((url, i) => `📎 Audio ${i + 1}: ${url}`),
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `💡 Click the links above to listen.`,
+    ];
+
+    await this.sendExternalChatMessage(roomName, lines.join('\n'));
   }
 }

@@ -7,6 +7,6 @@ import { MinioService } from "@/record-audio/minio.service";
   imports: [InterviewerModule],
   controllers: [InterviewAudioController],
   providers: [MinioService],
-  exports: [],
+  exports: [MinioService],
 })
 export class RecordAudioModule { }

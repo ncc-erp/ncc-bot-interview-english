@@ -580,7 +580,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, spokenCompletion, MessageType.TEXT);
       await this.agentService.sendTTS(roomName, spokenCompletion);
       await this.sendChatMessage(roomName,
-        `Congratulations! You have completed the interview. Thank you for your time. Please type *end to receive your audio recording.`
+        `🎉 Congratulations! You have completed the interview. Thank you for your time. Please type *end to receive your audio recording.`
       );
       return;
     }

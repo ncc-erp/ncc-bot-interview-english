@@ -17,6 +17,7 @@ import { SessionMessage } from "@/database-test/entities/session-message.entity"
 import { UserService } from "./user.service";
 import { AIService } from "./ai.service";
 import { ChatService } from "./chat.service";
+import { AxiosClient } from "@/shared/lib/axios-client";
 
 // const checkpointer = new MemorySaver();
 
@@ -36,6 +37,7 @@ import { ChatService } from "./chat.service";
     EnhancedInterviewerService,
     AIService,
     ChatService,
+    AxiosClient,
   ],
   exports: [ TemplateService,
     InterviewSessionService,

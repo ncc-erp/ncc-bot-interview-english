@@ -30,11 +30,11 @@ export class EnhancedInterviewerService {
         .map(s => `${s.name} (${s.questionsToSelect} question${s.questionsToSelect > 1 ? 's' : ''})`)
         .join(', ');
 
-      return `Hello! Welcome to the interview. I'll be asking you ${template.numberOfQuestions} questions. Please answer each question clearly and take your time. When you're ready, type or say "ready" to begin.`;
+      return `Hello! Welcome to the interview. I'll be asking you ${template.numberOfQuestions} questions. Please answer each question clearly and take your time. When you're ready, say "ready" to begin.`;
     }
 
     // Fallback for legacy format
-    return `Hello! Welcome to the Non-AI Generate Interview. I'll be asking you ${template.numberOfQuestions} pre-defined questions. Please answer each question clearly and take your time. When you're ready, type or say "ready" to begin.`;
+    return `Hello! Welcome to the Non-AI Generate Interview. I'll be asking you ${template.numberOfQuestions} pre-defined questions. Please answer each question clearly and take your time. When you're ready, say "ready" to begin.`;
   }
 
     const systemPrompt = `${template.systemPrompt}

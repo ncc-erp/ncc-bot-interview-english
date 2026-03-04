@@ -8,6 +8,8 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { InterviewerModule } from "./interviewer/interviewer.module";
 import { DatabaseTestModule } from "./database-test/database-test.module";
 import { RecordAudioModule } from "./record-audio/record-audio.module";
+import { OrchestratorModule } from "./orchestrator/orchestrator.module";
+
 
 @Module({
   imports: [
@@ -47,6 +49,7 @@ import { RecordAudioModule } from "./record-audio/record-audio.module";
     }),
     EnglishTestModule,
     RecordAudioModule,
+    OrchestratorModule,
   ],
   controllers: [],
   providers: [],

@@ -190,14 +190,21 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const mergedUrl = await this.minioService.uploadFile(mergedPath);
       this.logger.log(`📦 Merged uploaded: ${mergedUrl}`);
 
-      // Send to room chat
-      await this.chatService.sendAudioLinksToChatExternal(
-        roomName,
-        session.template.name,
-        [mergedUrl],
-      );
-      this.logger.log(`📤 Sent audio link to room ${roomName}`);
-
+      if (session.isExternal) {
+        await this.chatService.sendAudioLinksToChatExternal(
+          roomName,
+          session.template.name,
+          [mergedUrl],
+        );
+        this.logger.log(`📤 Sent audio link to external room ${roomName}`);
+      } else {
+        await this.chatService.sendAudioLinksToChat(
+          session.channelId,
+          session.template.name,
+          [mergedUrl],
+        );
+        this.logger.log(`📤 Sent audio link to clan channel ${session.channelId}`);
+      }
     } catch (error) {
      this.logger.error(`[RecordDone] Failed to process audio:`, error);
       await this.sendChatMessage(roomName, `❌ Failed to process recording: ${error.message}`);
@@ -365,6 +372,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         roomName,
         selectedTemplate.id,
         SessionMode.VOICE,
+        true,
       );
 
       // Map room → session in memory

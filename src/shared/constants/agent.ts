@@ -2,7 +2,7 @@ export const AGENT_ENDPOINTS = {
   CANCEL_DISPATCH: "/api/cancel_dispatch",
   CREATE_DISPATCH: "/api/create_dispatch",
   TTS_SPEAK: "/api/tts/speak",
-  STREAM_MESSAGE: "/api/stream_message",
+  STREAM_MESSAGE: "/api/sse/stream_transcript",
   AGENT_CONTROL_TRANSCRIPT: "/api/agent-control/transcript",
 } as const;
 

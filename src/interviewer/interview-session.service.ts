@@ -30,6 +30,7 @@ export class InterviewSessionService {
     roomName: string,
     templateId: string,
     mode: SessionMode = SessionMode.TEXT,
+    isExternal = false,
   ): Promise<InterviewSession> {
     // Find or create user
     const user = await this.userService.findOrCreateUser(mezonUserId, username);
@@ -86,6 +87,7 @@ export class InterviewSessionService {
       audioFilePaths: [],
       selectedQuestions,
       selectedSections,
+      isExternal,
     });
 
     const savedSession = await this.sessionRepo.save(session);

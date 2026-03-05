@@ -3642,6 +3642,11 @@ eventsource-parser@^3.0.1:
   resolved "https://registry.yarnpkg.com/eventsource-parser/-/eventsource-parser-3.0.6.tgz#292e165e34cacbc936c3c92719ef326d4aeb4e90"
   integrity sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg==
 
+eventsource@^2.0.2:
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/eventsource/-/eventsource-2.0.2.tgz#76dfcc02930fb2ff339520b6d290da573a9e8508"
+  integrity sha512-IzUmBGPR3+oUG9dUeXynyNmf91/3zUSJg1lCktzKw47OXuhco54U3r9B7O4XX+Rb1Itm9OZ2b0RkTs10bICOxA==
+
 eventsource@^4.0.0:
   version "4.1.0"
   resolved "https://registry.yarnpkg.com/eventsource/-/eventsource-4.1.0.tgz#19e552341e4375289121fe7e1c9d401e5b1f7e8b"
@@ -6300,14 +6305,15 @@ methods@^1.1.2, methods@~1.1.2:
   resolved "https://registry.yarnpkg.com/methods/-/methods-1.1.2.tgz#5529a4d67654134edcc5266656835b0f851afcee"
   integrity sha512-iclAHeNqNm68zFtnZ0e+1L2yUIdvzNoauKU4WBA3VvH/vPFieF7qfRlwUZU+DA9P9bPXIS90ulxoUoCH23sV2w==
 
-mezon-sdk@2.8.42, mezon-sdk@^2.8.42:
-  version "2.8.42"
-  resolved "https://registry.yarnpkg.com/mezon-sdk/-/mezon-sdk-2.8.42.tgz#95a76ca182c59bd2af927b9202f0d620962aff12"
-  integrity sha512-RV9K7Tuil84zMFh3ZemEBgkfbzOXsKoI3grkKlEiYYz+31Gvuvc1sunXTPS26tht00C3uQM9sPl2mnaS25JPIg==
+mezon-sdk@^2.8.43:
+  version "2.8.43"
+  resolved "https://registry.yarnpkg.com/mezon-sdk/-/mezon-sdk-2.8.43.tgz#1c41aad1dba5c02de348cb886cdb428be0291151"
+  integrity sha512-pHMoIdVin0144ILx0Rdas3MU/YTsPUbuyFs08M3ReoXQX4jKd4RdfwxPWx9vY+I5qu/fCmHAC1Unfvaszgov2w==
   dependencies:
     "@types/ws" "^8.5.12"
     base64-arraybuffer "^1.0.2"
     better-sqlite3 "^11.10.0"
+    eventsource "^2.0.2"
     jest-cucumber "^3.0.1"
     js-base64 "^3.7.8"
     mmn-client-js "^1.0.16"

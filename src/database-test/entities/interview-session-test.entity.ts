@@ -111,4 +111,7 @@ export class InterviewSession {
 
   @Column({ nullable: true, type: 'int' })
   durationSeconds: number; // Total duration in seconds
+
+  @Column({ default: false })
+  isExternal: boolean; // true = external meeting (no Mezon clan channel)
 }

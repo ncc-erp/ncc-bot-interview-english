@@ -156,12 +156,12 @@ export class AgentService {
         event.voice_channel_id ?? event.channel_id ?? ""
       );
 
-      if (!channel?.meeting_code) {
-        this.logger.error("Channel or meeting_code not found");
-        return;
-      }
+      // if (!channel?.meeting_code) {
+      //   this.logger.error("Channel or meeting_code not found");
+      //   return;
+      // }
 
-      const meeting_code = channel.meeting_code;
+      const meeting_code = event.voice_channel_id;
 
       // NEW: Disable transcript before removing agent
       try {
@@ -233,12 +233,12 @@ export class AgentService {
         event.voice_channel_id ?? event.channel_id ?? ""
       );
 
-      if (!channel?.meeting_code) {
-        this.logger.error("Channel or meeting_code not found");
-        return;
-      }
+      // if (!channel?.meeting_code) {
+      //   this.logger.error("Channel or meeting_code not found");
+      //   return;
+      // }
 
-      const meeting_code = channel.meeting_code;
+      const meeting_code = event.voice_channel_id 
 
       // UPDATED: Payload with type and metadata
       const payload = {

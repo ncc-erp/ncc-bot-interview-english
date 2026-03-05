@@ -240,7 +240,7 @@ ${nextQuestion}
 
       if (!selectedTemplateId) {
         await message.reply(
-          SmartMessage.text('⚠️ Please select a template from the dropdown first!')
+          SmartMessage.text('Please select a template from the dropdown first!')
         );
         return;
       }
@@ -252,16 +252,16 @@ ${nextQuestion}
 
       const channel = await client.channels.fetch(channelId);
 
-      if (!channel?.meeting_code) {
-        await message.reply(
-          SmartMessage.text('⚠️ Please join a voice channel first!')
-        );
-        return;
-      }
+      // if (!channel?.meeting_code) {
+      //   await message.reply(
+      //     SmartMessage.text('Please join a voice channel first!')
+      //   );
+      //   return;
+      // }
 
       const roomName = channel.meeting_code;
 
-      this.logger.log(`🚀 Starting interview for user ${userId}, template: ${template.name}`);
+      this.logger.log(`Starting interview for user ${userId}, template: ${template.name}`);
 
       await message.update(
         SmartMessage.text('⏳ Creating interview session...')
@@ -271,7 +271,7 @@ ${nextQuestion}
         userId,
         username,
         channelId,
-        roomName,
+        channelId,
         template.id,
         SessionMode.VOICE,
       );
@@ -289,14 +289,14 @@ ${nextQuestion}
         SmartMessage.text('🤖 Bot is joining the voice room...')
       );
 
-      await this.agentService.linkSessionToRoom(roomName, session.id);
-      await this.interviewerService.setRoomTemplate(roomName, template);
+      await this.agentService.linkSessionToRoom(channelId, session.id);
+      await this.interviewerService.setRoomTemplate(channelId, template);
 
-      const existingSessionId = this.agentService.getSessionIdForRoom(roomName);
+      const existingSessionId = this.agentService.getSessionIdForRoom(channelId);
       const botAlreadyInRoom = existingSessionId !== undefined && existingSessionId !== session.id;
 
       if (!botAlreadyInRoom) {
-        this.logger.log(`🤖 Inviting bot to room ${roomName}...`);
+        this.logger.log(`🤖 Inviting bot to room ${channelId}...`);
 
         await this.agentService.handleInviteAgent(
           client,
@@ -308,14 +308,14 @@ ${nextQuestion}
           session.id, // NEW: Pass sessionId
         );
 
-        this.logger.log(`✅ Bot ready - SSE connected and transcript enabled for room ${roomName}`);
+        this.logger.log(`✅ Bot ready - SSE connected and transcript enabled for room ${channelId}`);
 
       } else {
-        this.logger.log(`✅ Bot already in room ${roomName}, enabling transcript...`);
+        this.logger.log(`✅ Bot already in room ${channelId}, enabling transcript...`);
         
         // If bot already in room, just enable transcript
         try {
-          await this.agentService.enableTranscript(roomName);
+          await this.agentService.enableTranscript(channelId);
         } catch (error) {
           this.logger.error('Failed to enable transcript for existing bot:', error);
         }
@@ -332,8 +332,8 @@ ${nextQuestion}
       this.logger.log(`✅ Greeting saved to DB`);
 
       try {
-        await this.agentService.sendTTS(roomName, greeting);
-        this.logger.log(`🔊 TTS sent successfully to room ${roomName}`);
+        await this.agentService.sendTTS(channelId, greeting);
+        this.logger.log(`🔊 TTS sent successfully to room ${channelId}`);
       } catch (error) {
         this.logger.error(`❌ Failed to send TTS:`, error);
       }

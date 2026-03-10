@@ -499,6 +499,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
         if (parsed.type === 'PARTIAL') {
           this.resetDebounce(roomName, sessionId);
+          this.clearSilenceTimer(roomName);
           return;
         }
 
@@ -704,6 +705,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
     this.answerDebounceTimers.delete(roomName);
     this.pendingTranscripts.delete(roomName);
+    this.clearSilenceTimer(roomName);
     this.roomSessionMap.delete(roomName);
   }
 }

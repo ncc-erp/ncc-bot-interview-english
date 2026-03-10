@@ -18,6 +18,7 @@ import { UserService } from "./user.service";
 import { AIService } from "./ai.service";
 import { ChatService } from "./chat.service";
 import { AxiosClient } from "@/shared/lib/axios-client";
+// import { ScoringService } from "./scoring.service";
 
 // const checkpointer = new MemorySaver();
 
@@ -37,6 +38,7 @@ import { AxiosClient } from "@/shared/lib/axios-client";
     EnhancedInterviewerService,
     AIService,
     ChatService,
+    // ScoringService,
     AxiosClient,
   ],
   exports: [ TemplateService,
@@ -45,6 +47,7 @@ import { AxiosClient } from "@/shared/lib/axios-client";
     UserService,
     AIService,
     ChatService,
+    // ScoringService
 ],
 })
 export class InterviewerModule {}

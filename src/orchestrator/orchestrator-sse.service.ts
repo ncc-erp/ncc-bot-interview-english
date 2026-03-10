@@ -260,6 +260,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.answerDebounceTimers.delete(roomName);
     }
     this.pendingTranscripts.delete(roomName);
+    this.clearSilenceTimer(roomName);
     this.roomSessionMap.delete(roomName);
   }
 
@@ -349,11 +350,9 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       const lines = [
         '📋 Available Interview Templates:',
-        '━━━━━━━━━━━━━━━━━━━━━━',
         ...templates.map((t, i) =>
-          `${i + 1}. ${t.name} (${t.numberOfQuestions} questions, level: ${t.level})`
+          `${i + 1}. ${t.name} (${t.numberOfQuestions} questions)`
         ),
-        '━━━━━━━━━━━━━━━━━━━━━━',
         'Type *start <number> to begin. Example: *start 1',
       ];
 

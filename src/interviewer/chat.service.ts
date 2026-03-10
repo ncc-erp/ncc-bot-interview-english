@@ -146,11 +146,8 @@ export class ChatService {
     const lines = [
       `🎧 **Interview Recording Ready!**`,
       `Template: ${templateName}`,
-      `Files: ${audioUrls.length}`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
-      ...audioUrls.map((url, i) => `📎 Audio ${i + 1}: ${url}`),
-      `━━━━━━━━━━━━━━━━━━━━━━`,
-      `💡 Click the links above to listen.`,
+      ...audioUrls.map((url, i) => `📎 Audio File: ${url}`),
+      `Follow the links above to listen.`,
     ];
 
     await this.sendExternalChatMessage(roomName, lines.join('\n'));

@@ -13,6 +13,7 @@ import { AGENT_ENDPOINTS } from '@/shared/constants/agent';
 import { mergeRoomAudio, parseTracksWithOffset } from '@/record-audio/merged-audio.util';
 import { MinioService } from '@/record-audio/minio.service';
 import { ChatService } from '@/interviewer/chat.service';
+// import { ScoringService } from '@/interviewer/scoring.service';
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
@@ -36,11 +37,15 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   // Debounce: room_name → timer
   private readonly answerDebounceTimers = new Map<string, NodeJS.Timeout>();
   private readonly pendingTranscripts = new Map<string, string[]>();
-  private readonly ANSWER_DEBOUNCE_MS = 3000;
+  private readonly ANSWER_DEBOUNCE_MS = 4000;
 
   // Track active rooms: room_name → session_id
   // This is in-memory fast lookup; source of truth is DB (roomName field)
   private readonly roomSessionMap = new Map<string, string>();
+
+  // Silence timer: after bot asks a question, if no answer in 15s → skip to next
+  private readonly silenceTimers = new Map<string, NodeJS.Timeout>();
+  private readonly SILENCE_TIMEOUT_MS = 15_000;
 
   constructor(
     private readonly configService: ConfigService,
@@ -51,6 +56,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     private readonly axiosClient: AxiosClient,
     private readonly minioService: MinioService,
     private readonly chatService: ChatService,
+    // private readonly scoringService: ScoringService,
   ) {}
 
   onModuleInit() {
@@ -78,11 +84,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const token = this.configService.get<string>('MEZON_TOKEN')!;
     const url = `${baseUrl}/api/sse/metadata?appid=${appid}&token=${token}`;
 
-    this.logger.log('📡 Subscribing SSE /sse/metadata...');
+    this.logger.log('📡 Subscribing SSE /api/sse/metadata...');
     const es = new EventSource(url);
 
     es.onopen = () => {
-      this.logger.log('✅ SSE /sse/metadata connected');
+      this.logger.log('✅ SSE /api/sse/metadata connected');
       this.metadataRetryCount = 0;
     };
 
@@ -111,7 +117,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.MAX_RETRY_DELAY_MS,
     );
     this.metadataRetryCount++;
-    this.logger.warn(`🔄 Retrying /sse/metadata in ${delay}ms (attempt ${this.metadataRetryCount})`);
+    this.logger.warn(`🔄 Retrying /api/sse/metadata in ${delay}ms (attempt ${this.metadataRetryCount})`);
     this.metadataRetryTimer = setTimeout(() => this.subscribeMetadata(), delay);
   }
 
@@ -205,6 +211,31 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         );
         this.logger.log(`📤 Sent audio link to clan channel ${session.channelId}`);
       }
+
+      // // Trigger scoring async — does not block audio delivery to user
+      // const questions = session.selectedQuestions || [];
+      // if (questions.length > 0) {
+      //   this.scoringService.scoreInterview(
+      //     session.id,
+      //     mergedUrl,
+      //     questions,
+      //     async (scores) => {
+      //       await this.sessionService.saveQuestionScores(session.id, scores);
+
+      //       // Overall score = average of questions that have answers (score > 0)
+      //       const validScores = scores.filter(s => s.score > 0);
+      //       if (validScores.length > 0) {
+      //         const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
+      //         const totalScore = Math.round(avg * 10) / 10;
+      //         await this.sessionService.updateOverallScore(session.id, totalScore);
+      //         this.logger.log(`[Scoring] Overall score: ${totalScore}/10 for session ${session.id}`);
+      //       }
+      //     },
+      //   ).catch(err => this.logger.error(`[Scoring] Async error:`, err.message));
+      // } else {
+      //   this.logger.warn(`[Scoring] No questions found for session ${session.id}, skipping`);
+      // }
+
     } catch (error) {
      this.logger.error(`[RecordDone] Failed to process audio:`, error);
       await this.sendChatMessage(roomName, `❌ Failed to process recording: ${error.message}`);
@@ -242,11 +273,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const token = this.configService.get<string>('MEZON_TOKEN')!;
     const url = `${baseUrl}/api/sse/chat_external?appid=${appid}&token=${token}`;
 
-    this.logger.log('💬 Subscribing SSE /sse/chat_external...');
+    this.logger.log('💬 Subscribing SSE /api/sse/chat_external...');
     const es = new EventSource(url);
 
     es.onopen = () => {
-      this.logger.log('✅ SSE /sse/chat_external connected');
+      this.logger.log('✅ SSE /api/sse/chat_external connected');
       this.chatRetryCount = 0;
     };
 
@@ -275,7 +306,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.MAX_RETRY_DELAY_MS,
     );
     this.chatRetryCount++;
-    this.logger.warn(`🔄 Retrying /sse/chat_external in ${delay}ms (attempt ${this.chatRetryCount})`);
+    this.logger.warn(`🔄 Retrying /api/sse/chat_external in ${delay}ms (attempt ${this.chatRetryCount})`);
     this.chatRetryTimer = setTimeout(() => this.subscribeChatExternal(), delay);
   }
 
@@ -548,6 +579,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     fullText: string,
   ): Promise<void> {
     try {
+      this.clearSilenceTimer(roomName);
+      
       const session = await this.sessionService.getSessionById(sessionId);
       if (!session) return;
 
@@ -583,12 +616,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const overallFeedback = await this.interviewerService.generateOverallFeedback(freshSession);
       await this.sessionService.completeSession(session.id, overallFeedback);
 
-      const spokenCompletion = 'Congratulations! You have completed the interview. Thank you for your time. Please type *end to receive your audio recording.';
+      const spokenCompletion = 'Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to receive your audio recording.';
 
       await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, spokenCompletion, MessageType.TEXT);
       await this.agentService.sendTTS(roomName, spokenCompletion);
       await this.sendChatMessage(roomName,
-        `🎉 Congratulations! You have completed the interview. Thank you for your time. Please type *end to receive your audio recording.`
+        `🎉 Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to receive your audio recording.`
       );
       return;
     }
@@ -598,11 +631,54 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, nextQuestion, MessageType.TEXT, nextQuestionNumber);
     await this.agentService.sendTTS(roomName, nextQuestion);
     await this.sendChatMessage(roomName, `❓ **Question ${nextQuestionNumber}/${totalQuestions}:**\n${nextQuestion}`);
+
+    this.startSilenceTimer(roomName, session.id, nextQuestionNumber, totalQuestions);
   }
 
-  // ─────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────
+  private startSilenceTimer(
+    roomName: string,
+    sessionId: string,
+    questionNumber: number,
+    totalQuestions: number,
+  ): void {
+    this.clearSilenceTimer(roomName);
+
+    const timer = setTimeout(async () => {
+      this.silenceTimers.delete(roomName);
+      this.logger.warn(`[Silence] No answer for Q${questionNumber} in room ${roomName} after ${this.SILENCE_TIMEOUT_MS}ms — skipping`);
+
+      try {
+        await this.sendChatMessage(roomName, `⏭️ No answer detected, moving to next question...`);
+
+        // Save a placeholder answer so currentQuestionIndex advances
+        await this.sessionService.addMessage(
+          sessionId,
+          MessageRole.USER,
+          '[No answer — skipped due to silence]',
+          MessageType.AUDIO,
+          questionNumber,
+        );
+
+        const session = await this.sessionService.getSessionById(sessionId);
+        if (session) {
+          await this.processNextStep(session, roomName);
+        }
+      } catch (error) {
+        this.logger.error(`[Silence] Error auto-skipping Q${questionNumber}:`, error.message);
+      }
+    }, this.SILENCE_TIMEOUT_MS);
+
+    this.silenceTimers.set(roomName, timer);
+    this.logger.log(`[Silence] Started 15s timer for Q${questionNumber} in room ${roomName}`);
+  }
+
+  private clearSilenceTimer(roomName: string): void {
+    const timer = this.silenceTimers.get(roomName);
+    if (timer) {
+      clearTimeout(timer);
+      this.silenceTimers.delete(roomName);
+    }
+  }
 
   private async sendChatMessage(roomName: string, text: string): Promise<void> {
     try {

@@ -30,7 +30,7 @@ export class EnhancedInterviewerService {
         .map(s => `${s.name} (${s.questionsToSelect} question${s.questionsToSelect > 1 ? 's' : ''})`)
         .join(', ');
 
-      return `Hello! Welcome to the interview. I'll be asking you ${template.numberOfQuestions} questions. Please answer each question clearly and take your time. When you're ready, say "ready" to begin.`;
+      return `Hello! Welcome to the interview. I'll be asking you ${template.numberOfQuestions} questions. Please answer each question clearly and take your time. When you're ready, open your micro and say "ready" to begin.`;
     }
 
     // Fallback for legacy format

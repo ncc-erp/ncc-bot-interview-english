@@ -484,4 +484,46 @@ export class InterviewSessionService {
 
     this.logger.log(`Cleared audio URLs for session ${sessionId}`);
   }
+
+  // /**
+  //  * Save per-question scores from AI scoring pipeline
+  //  */
+  // async saveQuestionScores(sessionId: string, scores: {
+  //   questionNumber: number;
+  //   question: string;
+  //   answer: string;
+  //   criteria: {
+  //     relevance: number;
+  //     contentDepth: number;
+  //     fluency: number;
+  //     grammarVocabulary: number;
+  //     structure: number;
+  //   };
+  //   score: number;
+  //   feedback: string;
+  // }[]): Promise<void> {
+  //   await this.sessionRepo.update({ id: sessionId }, { questionScores: scores });
+  //   this.logger.log(`Saved ${scores.length} question scores for session ${sessionId}`);
+  // }
+
+  // /**
+  //  * Update totalScore inside overallFeedback after AI scoring completes
+  //  * Merges with existing overallFeedback to preserve overall/strengths/improvements
+  //  */
+  // async updateOverallScore(sessionId: string, totalScore: number): Promise<void> {
+  //   const session = await this.sessionRepo.findOne({
+  //     where: { id: sessionId },
+  //     select: ['id', 'overallFeedback'],
+  //   });
+
+  //   if (!session) return;
+
+  //   const updated = {
+  //     ...(session.overallFeedback || {}),
+  //     totalScore,
+  //   };
+
+  //   await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });
+  //   this.logger.log(`Updated overall score to ${totalScore}/10 for session ${sessionId}`);
+  // }
 }

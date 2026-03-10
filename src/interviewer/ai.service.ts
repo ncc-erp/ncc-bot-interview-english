@@ -18,7 +18,7 @@ export class AIService {
 
     constructor(private readonly configService: ConfigService) {
 
-        const provider = this.configService.get<string>('AI_PROVIDER', 'openai') as AIProvider;
+        const provider = this.configService.get<string>('AI_PROVIDER') as AIProvider;
         this.initializeModel(provider);
     }
 

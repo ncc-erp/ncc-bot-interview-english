@@ -369,7 +369,10 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      let selectedTemplate = templates[0];
+      const DEFAULT_TEMPLATE_NAME = 'Non-AI Generate Interview';
+      let selectedTemplate =
+        templates.find(t => t.name === DEFAULT_TEMPLATE_NAME) ?? templates[0];
+
       if (!isNaN(templateNumber) && templateNumber >= 1 && templateNumber <= templates.length) {
         selectedTemplate = templates[templateNumber - 1];
       } else if (!isNaN(templateNumber)) {
@@ -666,7 +669,14 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // private isChatEnabled(): boolean {
+  //   const val = this.configService.get<string>('SHOW_ROOM_CHAT', 'true');
+  //   return val.toLowerCase() !== 'false' && val !== '0';
+  // }
+
   private async sendChatMessage(roomName: string, text: string): Promise<void> {
+    // if (!this.isChatEnabled()) return;
+    
     try {
       const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
       const agentId = this.agentService.getAgentIdForRoom(roomName);

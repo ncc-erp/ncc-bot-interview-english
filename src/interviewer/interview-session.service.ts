@@ -457,6 +457,29 @@ export class InterviewSessionService {
     return this.getSessionById(sessionId);
   }
 
+  async addMergedAudioUrl(
+    sessionId: string,
+    url: string,
+  ): Promise<InterviewSession> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+      select: ['id'],
+    });
+ 
+    if (!session) {
+      throw new BadRequestException(`Session ${sessionId} not found`);
+    }
+ 
+    await this.sessionRepo.update(
+      { id: sessionId },
+      { audioFile: url },
+    );
+ 
+    this.logger.log(`Saved merged audio URL for session ${sessionId}: ${url}`);
+ 
+    return this.getSessionById(sessionId);
+  }
+
   /**
    * Get all audio URLs for a session
    */
@@ -485,45 +508,53 @@ export class InterviewSessionService {
     this.logger.log(`Cleared audio URLs for session ${sessionId}`);
   }
 
-  // /**
-  //  * Save per-question scores from AI scoring pipeline
-  //  */
-  // async saveQuestionScores(sessionId: string, scores: {
-  //   questionNumber: number;
-  //   question: string;
-  //   answer: string;
-  //   criteria: {
-  //     relevance: number;
-  //     contentDepth: number;
-  //     fluency: number;
-  //     grammarVocabulary: number;
-  //     structure: number;
-  //   };
-  //   score: number;
-  //   feedback: string;
-  // }[]): Promise<void> {
-  //   await this.sessionRepo.update({ id: sessionId }, { questionScores: scores });
-  //   this.logger.log(`Saved ${scores.length} question scores for session ${sessionId}`);
-  // }
+  async getRecentSessions(limit: number = 10): Promise<InterviewSession[]> {
+    return this.sessionRepo.find({
+      relations: ['template'],
+      order: { startedAt: 'DESC' },
+      take: limit,
+    });
+  }
 
-  // /**
-  //  * Update totalScore inside overallFeedback after AI scoring completes
-  //  * Merges with existing overallFeedback to preserve overall/strengths/improvements
-  //  */
-  // async updateOverallScore(sessionId: string, totalScore: number): Promise<void> {
-  //   const session = await this.sessionRepo.findOne({
-  //     where: { id: sessionId },
-  //     select: ['id', 'overallFeedback'],
-  //   });
+  /**
+   * Save per-question scores from AI scoring pipeline
+   */
+  async saveQuestionScores(sessionId: string, scores: {
+    questionNumber: number;
+    question: string;
+    answer: string;
+    criteria: {
+      relevance: number;
+      contentDepth: number;
+      fluency: number;
+      grammarVocabulary: number;
+      structure: number;
+    };
+    score: number;
+    feedback: string;
+  }[]): Promise<void> {
+    await this.sessionRepo.update({ id: sessionId }, { questionScores: scores });
+    this.logger.log(`Saved ${scores.length} question scores for session ${sessionId}`);
+  }
 
-  //   if (!session) return;
+  /**
+   * Update totalScore inside overallFeedback after AI scoring completes
+   * Merges with existing overallFeedback to preserve overall/strengths/improvements
+   */
+  async updateOverallScore(sessionId: string, totalScore: number): Promise<void> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+      select: ['id', 'overallFeedback'],
+    });
 
-  //   const updated = {
-  //     ...(session.overallFeedback || {}),
-  //     totalScore,
-  //   };
+    if (!session) return;
 
-  //   await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });
-  //   this.logger.log(`Updated overall score to ${totalScore}/10 for session ${sessionId}`);
-  // }
+    const updated = {
+      ...(session.overallFeedback || {}),
+      totalScore,
+    };
+
+    await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });
+    this.logger.log(`Updated overall score to ${totalScore}/10 for session ${sessionId}`);
+  }
 }

@@ -41,6 +41,7 @@ export class AgentService {
   private readonly logger = new Logger(AgentService.name);
   private readonly sseConnections = new Map<string, EventSource>();
   private readonly roomSessions = new Map<string, string>();
+  private readonly roomAgents = new Map<string, string>();
 
   // Cache sessions để tránh load lại nhiều lần
   private readonly sessionCache = new Map<string, {
@@ -85,28 +86,17 @@ export class AgentService {
    */
   async enableTranscript(roomName: string): Promise<void> {
     try {
-      const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
-      const url = `${baseurl}${AGENT_ENDPOINTS.AGENT_CONTROL_TRANSCRIPT}`;
-
-      const payload = {
-        action: "enable",
-        room_name: roomName,
-      };
-
+      const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
+      const agentId = this.roomAgents.get(roomName);
       this.logger.log(`🎙️ Enabling transcript for room ${roomName}...`);
-
-      const response = await this.axiosClient
-        .getInstance()
-        .post(url, payload);
-
-      this.logger.log(
-        `✅ Transcript enabled for room ${roomName}: ${JSON.stringify(response.data)}`
-      );
+      await this.axiosClient.getInstance().post(`${baseurl}/api/dispatch/agent-request`, {
+        room_name: roomName,
+        agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+        payload: { request_type: 'transcript_control', action: 'enable' },
+      });
+      this.logger.log(`✅ Transcript enabled for room ${roomName}`);
     } catch (error) {
-      this.logger.error(
-        `❌ Failed to enable transcript for room ${roomName}:`,
-        error
-      );
+      this.logger.error(`❌ Failed to enable transcript for room ${roomName}:`, error);
       throw error;
     }
   }
@@ -116,28 +106,17 @@ export class AgentService {
    */
   async disableTranscript(roomName: string): Promise<void> {
     try {
-      const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
-      const url = `${baseurl}${AGENT_ENDPOINTS.AGENT_CONTROL_TRANSCRIPT}`;
-
-      const payload = {
-        action: "disable",
-        room_name: roomName,
-      };
-
+      const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
+      const agentId = this.roomAgents.get(roomName);
       this.logger.log(`🔇 Disabling transcript for room ${roomName}...`);
-
-      const response = await this.axiosClient
-        .getInstance()
-        .post(url, payload);
-
-      this.logger.log(
-        `✅ Transcript disabled for room ${roomName}: ${JSON.stringify(response.data)}`
-      );
+      await this.axiosClient.getInstance().post(`${baseurl}/api/dispatch/agent-request`, {
+        room_name: roomName,
+        agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+        payload: { request_type: 'transcript_control', action: 'disable' },
+      });
+      this.logger.log(`✅ Transcript disabled for room ${roomName}`);
     } catch (error) {
-      this.logger.error(
-        `❌ Failed to disable transcript for room ${roomName}:`,
-        error
-      );
+      this.logger.error(`❌ Failed to disable transcript for room ${roomName}:`, error);
       // Don't throw, as this is cleanup
     }
   }
@@ -238,7 +217,7 @@ export class AgentService {
       //   return;
       // }
 
-      const meeting_code = event.voice_channel_id 
+      const meeting_code = event.voice_channel_id
 
       // UPDATED: Payload with type and metadata
       const payload = {
@@ -297,7 +276,7 @@ export class AgentService {
         );
         // Continue anyway, maybe manual retry later
       }
-      
+
     } catch (error) {
       this.logger.error(
         `Error inviting agent: ${error}`,
@@ -522,32 +501,32 @@ export class AgentService {
       await this.sendTTS(session.roomName, spokenCompletion);
 
       const channel = client.channels.get(channelId);
-      if (channel){
+      if (channel) {
         await channel.send(
-        SmartMessage.build()
-          .addEmbed(
-            new EmbedBuilder()
-              .setColor('#00cc66')
-              .setTitle('🎉 Interview Complete!')
-              .setDescription(
-                `Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session\n\n` +
-                `📝 Template: ${session.template.name}\n` +
-                `❓ Questions Answered: ${session.template.numberOfQuestions}\n\n` +
-                `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                `👇 Click **Finish & Get Recording** to end the session and receive your audio recording.`
-              )
-          )
-          .addButton(
-            new ButtonBuilder()
-              .setCustomId(`/interview/finish/${session.id}`)
-              .setLabel('✅ Finish & Get Recording')
-              .setStyle(ButtonStyle.Success)
-          )
-          .toContent()
-      );
-      }else{
+          SmartMessage.build()
+            .addEmbed(
+              new EmbedBuilder()
+                .setColor('#00cc66')
+                .setTitle('🎉 Interview Complete!')
+                .setDescription(
+                  `Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session\n\n` +
+                  `📝 Template: ${session.template.name}\n` +
+                  `❓ Questions Answered: ${session.template.numberOfQuestions}\n\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                  `👇 Click **Finish & Get Recording** to end the session and receive your audio recording.`
+                )
+            )
+            .addButton(
+              new ButtonBuilder()
+                .setCustomId(`/interview/finish/${session.id}`)
+                .setLabel('✅ Finish & Get Recording')
+                .setStyle(ButtonStyle.Success)
+            )
+            .toContent()
+        );
+      } else {
         this.logger.error(`Channel ${channelId} not found`);
-      }    
+      }
       return;
     }
 
@@ -612,7 +591,8 @@ Type your answer or speak in the voice room...`;
    */
   async sendTTS(roomName: string, text: string): Promise<void> {
     try {
-      await this.ttsService.callTTSAPI(roomName, text);
+      const agentId = this.roomAgents.get(roomName);
+      await this.ttsService.callTTSAPI(roomName, text, 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d');
       this.logger.log(`[TTS SENT] Room ${roomName}: ${text.substring(0, 100)}...`);
     } catch (error) {
       this.logger.error(`Failed to send TTS for room ${roomName}:`, error);
@@ -622,6 +602,10 @@ Type your answer or speak in the voice room...`;
 
   getSessionIdForRoom(roomName: string): string | undefined {
     return this.roomSessions.get(roomName);
+  }
+
+  getAgentIdForRoom(roomName: string): string | undefined {
+    return this.roomAgents.get(roomName);
   }
 
   clearExpiredCache(): void {
@@ -718,7 +702,7 @@ Type your answer or speak in the voice room...`;
 
     this.sseConnections.set(sseKey, es);
   }
-  
+
   // ─────────────────────────────────────────────
   // External Meeting Methods (no Nezon client needed)
   // ─────────────────────────────────────────────
@@ -732,37 +716,39 @@ Type your answer or speak in the voice room...`;
       appid: this.configService.get<string>('MEZON_BOT_ID')!,
       token: this.configService.get<string>('MEZON_TOKEN')!,
     };
-
+ 
     const payload = {
       account,
       room_name: roomName,
       type: 'interview',
       metadata: { interview_id: sessionId },
     };
-
+ 
     this.logger.log(`[External] Inviting agent to room ${roomName}...`);
-
     try {
       const response = await this.axiosClient.getInstance().post(AGENT_ENDPOINTS.CREATE_DISPATCH, payload);
       this.logger.log(`[External] Agent invited: ${JSON.stringify(response.data)}`);
+ 
+      const agentId = response.data?.agent_name;
+      if (agentId) {
+        this.roomAgents.set(roomName, agentId);
+        this.logger.log(`[External] Stored agent_id ${agentId} for room ${roomName}`);
+      }
     } catch (error) {
       this.logger.error(`[External] Failed to invite agent:`, error);
       throw error;
     }
-
-    // Link session to room in memory
+ 
     this.roomSessions.set(roomName, sessionId);
-
-    // Wait 2s for agent to fully join then enable transcript
+ 
     this.logger.log(`[External] Waiting 2s for agent to join room ${roomName}...`);
     await new Promise(resolve => setTimeout(resolve, 2000));
-
+ 
     try {
       await this.enableTranscript(roomName);
       this.logger.log(`[External] ✅ Transcript enabled for room ${roomName}`);
     } catch (error) {
       this.logger.error(`[External] Failed to enable transcript:`, error);
-      // Continue anyway
     }
   }
 
@@ -775,30 +761,29 @@ Type your answer or speak in the voice room...`;
       appid: this.configService.get<string>('MEZON_BOT_ID')!,
       token: this.configService.get<string>('MEZON_TOKEN')!,
     };
-
-    try {
-      await this.disableTranscript(roomName);
-    } catch { /* ignore */ }
-
+ 
+    try { await this.disableTranscript(roomName); } catch { /* ignore */ }
+ 
     const payload = {
       account,
       room_name: roomName,
       type: 'interview',
       metadata: { interview_id: sessionId },
     };
-
+ 
     try {
       const response = await this.axiosClient.getInstance().post(AGENT_ENDPOINTS.CANCEL_DISPATCH, payload);
       this.logger.log(`[External] Agent removed from room ${roomName}: ${JSON.stringify(response.data)}`);
     } catch (error) {
       this.logger.error(`[External] Failed to remove agent:`, error);
     }
-
-    // Cleanup all room state
+ 
+    // Cleanup all room state including silence timer
     const sseKey = `${account.appid}-${roomName}`;
     this.sseConnections.get(sseKey)?.close();
     this.sseConnections.delete(sseKey);
     this.roomSessions.delete(roomName);
+    this.roomAgents.delete(roomName);
     this.pendingTranscripts.delete(roomName);
     this.processedMessages.delete(roomName);
     const timer = this.answerDebounceTimers.get(roomName);
@@ -823,5 +808,5 @@ Type your answer or speak in the voice room...`;
     this.logger.log(`[RecordDone] Queuing merge for session ${sessionId}, ${fileResults.length} tracks`);
     this.ttsQueue.add('record-done', { sessionId, roomName, fileResults });
   }
-  
+
 }

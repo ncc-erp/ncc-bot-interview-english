@@ -17,7 +17,7 @@ export class TTSProvider {
     private axiosClient: AxiosClient
   ) {}
 
-  async callTTSAPI(roomName: string, text: string): Promise<void> {
+  async callTTSAPI(roomName: string, text: string, agentId?: string): Promise<void> {
     try {
       await appendFile(this.logFilePath, text, "utf-8");
     } catch (error) {
@@ -27,26 +27,22 @@ export class TTSProvider {
       );
     }
 
-    const account: Account = {
-      appid: this.configService.get<string>("MEZON_BOT_ID")!,
-      token: this.configService.get<string>("MEZON_TOKEN")!,
-    };
-
-    const language = "en";
-    const voice = "default";
-
+    const baseurl = this.configService.get<string>("AGENT_BASE_URL")!;
+ 
     const payload = {
-      account,
       room_name: roomName,
-      text,
-      language,
-      voice,
+      agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+      payload: {
+        request_type: "tts_play",
+        text,
+        sender_identity: "orchestrator",
+      },
     };
 
     try {
       const response = await this.axiosClient
         .getInstance()
-        .post(AGENT_ENDPOINTS.TTS_SPEAK, payload);
+        .post(`${baseurl}/api/dispatch/agent-request`, payload);
 
       this.logger.verbose(
         `[TTS] API response for room ${roomName}:`,

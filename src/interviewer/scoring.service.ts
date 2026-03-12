@@ -150,7 +150,7 @@ export class ScoringService {
       '    "structure": 0.5',
       '  },',
       '  "score": 7.5,',
-      '  "feedback": "2-3 sentences on strengths and specific areas to improve"',
+      '  "feedback": "1 sentences on strengths and specific areas to improve"',
       '}]',
     ].join('\n');
 
@@ -191,7 +191,7 @@ export class ScoringService {
         }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
         },
       },
       { timeout: 120_000 },
@@ -261,7 +261,7 @@ export class ScoringService {
         }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
         },
       },
       { timeout: 120_000 },
@@ -318,7 +318,7 @@ export class ScoringService {
       return JSON.parse(jsonStr) as QuestionScore[];
     } catch (err) {
       this.logger.error(
-        `[Scoring] Failed to parse Gemini response (${err.message}): ${raw.substring(0, 500)}`,
+        `[Scoring] Failed to parse Gemini response (${err.message}): ${raw.substring(0)}`,
       );
       return questions.map((q, i) => ({
         questionNumber: i + 1,

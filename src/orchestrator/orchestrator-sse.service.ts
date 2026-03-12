@@ -13,7 +13,7 @@ import { AGENT_ENDPOINTS } from '@/shared/constants/agent';
 import { mergeRoomAudio, parseTracksWithOffset } from '@/record-audio/merged-audio.util';
 import { MinioService } from '@/record-audio/minio.service';
 import { ChatService } from '@/interviewer/chat.service';
-// import { ScoringService } from '@/interviewer/scoring.service';
+import { ScoringService } from '@/interviewer/scoring.service';
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
@@ -56,7 +56,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     private readonly axiosClient: AxiosClient,
     private readonly minioService: MinioService,
     private readonly chatService: ChatService,
-    // private readonly scoringService: ScoringService,
+    private readonly scoringService: ScoringService,
   ) {}
 
   onModuleInit() {
@@ -196,49 +196,35 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const mergedUrl = await this.minioService.uploadFile(mergedPath);
       this.logger.log(`📦 Merged uploaded: ${mergedUrl}`);
 
-      if (session.isExternal) {
-        await this.chatService.sendAudioLinksToChatExternal(
-          roomName,
-          session.template.name,
-          [mergedUrl],
-        );
-        this.logger.log(`📤 Sent audio link to external room ${roomName}`);
+      await this.sessionService.addMergedAudioUrl(session.id, mergedUrl);
+      this.logger.log(`✅ Saved ${mergedUrl} to session ${session.id}`);
+
+      // Trigger scoring async — does not block audio delivery to user
+      const questions = session.selectedQuestions || [];
+      if (questions.length > 0) {
+        this.scoringService.scoreInterview(
+          session.id,
+          mergedUrl,
+          questions,
+          async (scores) => {
+            await this.sessionService.saveQuestionScores(session.id, scores);
+
+            // Overall score = average of questions that have answers (score > 0)
+            const validScores = scores.filter(s => s.score > 0);
+            if (validScores.length > 0) {
+              const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
+              const totalScore = Math.round(avg * 10) / 10;
+              await this.sessionService.updateOverallScore(session.id, totalScore);
+              this.logger.log(`[Scoring] Overall score: ${totalScore}/10 for session ${session.id}`);
+            }
+          },
+        ).catch(err => this.logger.error(`[Scoring] Async error:`, err.message));
       } else {
-        await this.chatService.sendAudioLinksToChat(
-          session.channelId,
-          session.template.name,
-          [mergedUrl],
-        );
-        this.logger.log(`📤 Sent audio link to clan channel ${session.channelId}`);
+        this.logger.warn(`[Scoring] No questions found for session ${session.id}, skipping`);
       }
-
-      // // Trigger scoring async — does not block audio delivery to user
-      // const questions = session.selectedQuestions || [];
-      // if (questions.length > 0) {
-      //   this.scoringService.scoreInterview(
-      //     session.id,
-      //     mergedUrl,
-      //     questions,
-      //     async (scores) => {
-      //       await this.sessionService.saveQuestionScores(session.id, scores);
-
-      //       // Overall score = average of questions that have answers (score > 0)
-      //       const validScores = scores.filter(s => s.score > 0);
-      //       if (validScores.length > 0) {
-      //         const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
-      //         const totalScore = Math.round(avg * 10) / 10;
-      //         await this.sessionService.updateOverallScore(session.id, totalScore);
-      //         this.logger.log(`[Scoring] Overall score: ${totalScore}/10 for session ${session.id}`);
-      //       }
-      //     },
-      //   ).catch(err => this.logger.error(`[Scoring] Async error:`, err.message));
-      // } else {
-      //   this.logger.warn(`[Scoring] No questions found for session ${session.id}, skipping`);
-      // }
 
     } catch (error) {
      this.logger.error(`[RecordDone] Failed to process audio:`, error);
-      await this.sendChatMessage(roomName, `❌ Failed to process recording: ${error.message}`);
     }
   }
 
@@ -683,12 +669,19 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private async sendChatMessage(roomName: string, text: string): Promise<void> {
     try {
       const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
-      const appid = this.configService.get<string>('MEZON_BOT_ID')!;
-      const token = this.configService.get<string>('MEZON_TOKEN')!;
-
+      const agentId = this.agentService.getAgentIdForRoom(roomName);
+ 
       await this.axiosClient.getInstance().post(
-        `${baseUrl}/api/chat_external/send_message`,
-        { account: { appid, token }, room_name: roomName, text },
+        `${baseUrl}/api/dispatch/agent-request`,
+        {
+          room_name: roomName,
+          agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+          payload: {
+            request_type: 'send_chat_message',
+            message: text,
+            sender_name: 'Interview Bot',
+          },
+        },
       );
     } catch (error) {
       this.logger.error(`Failed to send chat message to room ${roomName}:`, error.message);

@@ -656,4 +656,72 @@ ${nextQuestion}
       await message.update(SmartMessage.text('❌ Something went wrong. Please try again.'));
     }
   }
+
+  @Command("history")
+  async history(
+    @AutoContext() [message]: Nezon.AutoContext,
+  ) {
+    try {
+      const sessions = await this.sessionService.getRecentSessions(10);
+ 
+      if (sessions.length === 0) {
+        await message.reply(SmartMessage.text('📭 No interview sessions found.'));
+        return;
+      }
+ 
+      const statusEmoji: Record<string, string> = {
+        pending:     '⏳',
+        in_progress: '▶️',
+        completed:   '✅',
+        cancelled:   '❌',
+      };
+ 
+      const lines: string[] = ['📋 **Recent Interviews**\n'];
+ 
+      sessions.forEach((session, index) => {
+        const emoji  = statusEmoji[session.status] ?? '❓';
+        const start  = session.startedAt
+          ? new Date(session.startedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+          : '—';
+        const end    = session.completedAt
+          ? new Date(session.completedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+          : '—';
+ 
+        let duration = '—';
+        if (session.durationSeconds) {
+          const m = Math.floor(session.durationSeconds / 60);
+          const s = session.durationSeconds % 60;
+          duration = m > 0 ? `${m}m ${s}s` : `${s}s`;
+        }
+ 
+        const audio = session.audioFile
+          ? session.audioFile
+          : session.audioFilePaths?.length
+            ? `${session.audioFilePaths.length} track(s)`
+            : '—';
+
+        const totalScore = session.overallFeedback?.totalScore != null
+          ? `${session.overallFeedback.totalScore}/10`
+          : '—';
+ 
+        lines.push(
+          `**${index + 1}. ${emoji} ${session.template?.name ?? 'Unknown'}**`,
+          `   👤 User: \`${session.userId}\``,
+          `   🏠 Room: \`${session.roomName ?? '—'}\``,
+          `   📅 Started: ${start}`,
+          `   🏁 Completed: ${end}`,
+          `   ⏱ Duration: ${duration}`,
+          `   ⭐ Score: ${totalScore}`,
+          `   🎧 Audio: ${audio}`,
+          `   ━━━━━━━━━━━━━━━━━━━━━━`,
+          '',
+        );
+      });
+ 
+      await message.reply(SmartMessage.text(lines.join('\n')));
+    } catch (error) {
+      this.logger.error('Error in history command:', error);
+      await message.reply(SmartMessage.text('❌ Failed to load interview history.'));
+    }
+  }
 }

@@ -96,6 +96,10 @@ export class InterviewSession {
   @Column('jsonb', { default: [] })
   audioFilePaths: string[];
 
+  // Audio file paths
+  @Column('text', { nullable: true })
+  audioFile: string;
+
   // Full transcript for voice mode
   @Column('text', { nullable: true })
   fullTranscript: string;

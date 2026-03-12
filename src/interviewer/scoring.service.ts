@@ -304,11 +304,22 @@ export class ScoringService {
   // ─────────────────────────────────────────────
 
   private parseGeminiResponse(raw: string, questions: string[]): QuestionScore[] {
+    // Extract JSON array by finding first '[' and last ']',
+    // bypassing any markdown fences or preamble text from Gemini.
     try {
-      const cleaned = raw.replace(/```json|```/g, '').trim();
-      return JSON.parse(cleaned) as QuestionScore[];
-    } catch {
-      this.logger.error(`[Scoring] Failed to parse Gemini response: ${raw.substring(0, 300)}`);
+      const start = raw.indexOf('[');
+      const end   = raw.lastIndexOf(']');
+
+      if (start === -1 || end === -1 || end < start) {
+        throw new Error('No JSON array found in response');
+      }
+
+      const jsonStr = raw.slice(start, end + 1);
+      return JSON.parse(jsonStr) as QuestionScore[];
+    } catch (err) {
+      this.logger.error(
+        `[Scoring] Failed to parse Gemini response (${err.message}): ${raw.substring(0, 500)}`,
+      );
       return questions.map((q, i) => ({
         questionNumber: i + 1,
         question: q,

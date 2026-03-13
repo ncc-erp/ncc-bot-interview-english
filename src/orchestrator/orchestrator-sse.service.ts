@@ -605,12 +605,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const overallFeedback = await this.interviewerService.generateOverallFeedback(freshSession);
       await this.sessionService.completeSession(session.id, overallFeedback);
 
-      const spokenCompletion = 'Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to end the inerview.';
+      const spokenCompletion = 'Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to end the interview.';
 
       await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, spokenCompletion, MessageType.TEXT);
       await this.agentService.sendTTS(roomName, spokenCompletion);
       await this.sendChatMessage(roomName,
-        `🎉 Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to end the inerview.`
+        `🎉 Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to end the interview.`
       );
       return;
     }

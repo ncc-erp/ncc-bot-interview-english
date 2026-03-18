@@ -7,6 +7,16 @@ import { setupBullBoard } from "@/bull-board/bull-board.module";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+    origin: [
+      'http://localhost:3001',   // Next.js dev (adjust port if different)
+      'http://localhost:3000',   // or same port if using proxy
+      process.env.ADMIN_ORIGIN, // production origin from env
+    ].filter(Boolean) as string[],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
+  });
+
   const configService = app.get(ConfigService);
 
   const port = configService.get<number>('PORT')

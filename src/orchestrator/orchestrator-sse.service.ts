@@ -401,7 +401,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`✅ Session ${session.id} created for room ${roomName}`);
 
       // Invite agent + setup transcript SSE
-      await this.agentService.handleInviteAgentExternal(roomName, session.id);
+      await this.agentService.enableTranscript(roomName);
       // Subscribe transcript SSE for this room
       this.subscribeTranscript(roomName, session.id);
 
@@ -669,13 +669,13 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // private isChatEnabled(): boolean {
-  //   const val = this.configService.get<string>('SHOW_ROOM_CHAT', 'true');
-  //   return val.toLowerCase() !== 'false' && val !== '0';
-  // }
+  private isChatEnabled(): boolean {
+    const val = this.configService.get<string>('SHOW_ROOM_CHAT', 'true');
+    return val.toLowerCase() !== 'false' && val !== '0';
+  }
 
   private async sendChatMessage(roomName: string, text: string): Promise<void> {
-    // if (!this.isChatEnabled()) return;
+    if (!this.isChatEnabled()) return;
     
     try {
       const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;

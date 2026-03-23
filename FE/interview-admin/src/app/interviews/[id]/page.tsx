@@ -78,9 +78,12 @@ export default function InterviewDetailPage() {
     <div>
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} style={{ marginBottom: 16 }}>
-          Back to List
-        </Button>
+        <a
+          onClick={() => router.back()}
+          style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 16 }}
+        >
+          ← Back to List
+        </a>
         <h1 style={{ fontSize: 24, margin: 0 }}>Interview Detail</h1>
       </div>
 

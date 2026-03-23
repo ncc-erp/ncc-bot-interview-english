@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Input, Statistic, Row, Col, Select, DatePicker, Space, Alert } from "antd";
+import { Card, Input, Statistic, Row, Col, Select, DatePicker, Space, Alert, Button } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import dayjs, { Dayjs } from "dayjs";
 import InterviewTable from "@/components/InterviewTable";
@@ -114,32 +115,42 @@ export default function InterviewListPage() {
 
       <Card>
         {/* Filter bar */}
-        <Space style={{ marginBottom: 20, flexWrap: "wrap" }}>
-          <Input
-            placeholder="Search interviews..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            allowClear
-            style={{ width: 260 }}
-          />
-          <Select
-            value={statusFilter}
-            onChange={setStatusFilter}
-            style={{ width: 160 }}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 8 }}>
+          <Space style={{ flexWrap: "wrap" }}>
+            <Input
+              placeholder="Search interviews..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              allowClear
+              style={{ width: 260 }}
+            />
+            <Select
+              value={statusFilter}
+              onChange={setStatusFilter}
+              style={{ width: 160 }}
+            >
+              <Option value="all">All statuses</Option>
+              <Option value="completed">Completed</Option>
+              <Option value="in_progress">In Progress</Option>
+              <Option value="pending">Pending</Option>
+              <Option value="cancelled">Cancelled</Option>
+            </Select>
+            <RangePicker
+              value={dateRange}
+              onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
+              format="DD/MM/YYYY"
+              placeholder={["From date", "To date"]}
+            />
+          </Space>
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={fetchList}
+            loading={listLoading}
           >
-            <Option value="all">All statuses</Option>
-            <Option value="completed">Completed</Option>
-            <Option value="in_progress">In Progress</Option>
-            <Option value="pending">Pending</Option>
-            <Option value="cancelled">Cancelled</Option>
-          </Select>
-          <RangePicker
-            value={dateRange}
-            onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
-            format="DD/MM/YYYY"
-            placeholder={["From date", "To date"]}
-          />
-        </Space>
+            Refresh
+          </Button>
+        </div>
 
         {/* Error */}
         {listError && (

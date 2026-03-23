@@ -100,9 +100,9 @@ export default function InterviewTable({ data, loading, onView, pagination }: Pr
     {
       title: "Action",
       render: (_: any, record: InterviewListItem) => (
-        <Button size="small" onClick={() => onView(record)}>
-          View Detail
-        </Button>
+        <a onClick={() => onView(record)} style={{ cursor: "pointer" }}>
+          View Details
+        </a>
       ),
     },
   ];

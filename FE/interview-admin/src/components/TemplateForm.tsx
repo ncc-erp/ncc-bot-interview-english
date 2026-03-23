@@ -266,9 +266,12 @@ export default function TemplateFormPage({ mode }: Props) {
     <div style={{ maxWidth: 900 }}>
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()} style={{ marginBottom: 14 }}>
-          Back
-        </Button>
+        <a
+          onClick={() => router.back()}
+          style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 16, color: "#1677ff" }}
+        >
+          ← Back
+        </a>
         <h1 style={{ fontSize: 24, margin: 0 }}>
           {mode === "create" ? "New Template" : "Edit Template"}
         </h1>

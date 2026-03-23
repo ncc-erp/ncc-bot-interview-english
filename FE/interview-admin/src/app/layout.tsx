@@ -1,24 +1,15 @@
-"use client";
+import LayoutClient from "@/components/LayoutClient";
 
-import { Layout } from "antd";
-import Sidebar from "@/components/Sidebar";
-import "antd/dist/reset.css";
-
-const { Content } = Layout;
+export const metadata = {
+  title: "Interview Bot Dashboard",
+  description: "Admin dashboard",
+};
 
 export default function RootLayout({ children }: any) {
   return (
     <html>
       <body>
-        <Layout style={{ minHeight: "100vh" }}>
-          <Sidebar />
-
-          <Layout>
-            <Content style={{ padding: 30, background: "#f5f7fb" }}>
-              {children}
-            </Content>
-          </Layout>
-        </Layout>
+        <LayoutClient>{children}</LayoutClient>
       </body>
     </html>
   );

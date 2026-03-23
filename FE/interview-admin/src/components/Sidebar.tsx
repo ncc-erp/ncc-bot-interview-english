@@ -3,6 +3,7 @@
 import { Layout, Menu } from "antd";
 import { FileTextOutlined, MessageOutlined } from "@ant-design/icons";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 
 const { Sider } = Layout;
 
@@ -14,9 +15,11 @@ export default function Sidebar() {
 
   return (
     <Sider width={220} style={{ background: "#fff" }}>
-      <div style={{ padding: 20, fontWeight: 700, fontSize: 18 }}>
-        AI Interview
-      </div>
+      <h2 style={{ padding: "16px" }}>
+        <Link href="/interviews" style={{ color: "black", textDecoration: "none" }}>
+          AI Interview
+        </Link>
+      </h2>
 
       <Menu
         mode="inline"

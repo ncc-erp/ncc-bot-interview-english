@@ -38,6 +38,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private readonly answerDebounceTimers = new Map<string, NodeJS.Timeout>();
   private readonly pendingTranscripts = new Map<string, string[]>();
   private readonly ANSWER_DEBOUNCE_MS = 4000;
+  private readonly MAX_REASK_COUNT = 2;
 
   // Track active rooms: room_name → session_id
   // This is in-memory fast lookup; source of truth is DB (roomName field)
@@ -625,10 +626,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   }
 
   private startSilenceTimer(
-    roomName: string,
-    sessionId: string,
-    questionNumber: number,
-    totalQuestions: number,
+      roomName: string,
+      sessionId: string,
+      questionNumber: number,
+      totalQuestions: number,
+      retryCount = 0,
   ): void {
     this.clearSilenceTimer(roomName);
 
@@ -637,23 +639,45 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(`[Silence] No answer for Q${questionNumber} in room ${roomName} after ${this.SILENCE_TIMEOUT_MS}ms — skipping`);
 
       try {
+        const session = await this.sessionService.getSessionById(sessionId);
+        if (!session) return;
+
+        if (retryCount < this.MAX_REASK_COUNT) {
+          const currentQuestion =
+              session.messages
+                  ?.filter((m: any) =>
+                      m.role === MessageRole.ASSISTANT &&
+                      m.questionIndex === questionNumber
+                  )
+                  ?.at(-1)?.content;
+
+          const repeatText = currentQuestion || await this.interviewerService.generateQuestion(session, questionNumber);
+
+          await this.sendChatMessage(roomName, `I didn't hear your answer. Let me repeat the question.`);
+          await this.agentService.sendTTS(roomName, repeatText);
+          await this.sendChatMessage(roomName, `❓ **Question ${questionNumber}/${totalQuestions}:**\n${repeatText}`);
+
+          this.startSilenceTimer(roomName, sessionId, questionNumber, totalQuestions, retryCount + 1);
+          return;
+        }
+
         await this.sendChatMessage(roomName, `⏭️ No answer detected, moving to next question...`);
 
         // Save a placeholder answer so currentQuestionIndex advances
         await this.sessionService.addMessage(
-          sessionId,
-          MessageRole.USER,
-          '[No answer — skipped due to silence]',
-          MessageType.AUDIO,
-          questionNumber,
+            sessionId,
+            MessageRole.USER,
+            '[No answer — skipped due to silence]',
+            MessageType.AUDIO,
+            questionNumber,
         );
 
-        const session = await this.sessionService.getSessionById(sessionId);
-        if (session) {
-          await this.processNextStep(session, roomName);
+        const refreshed = await this.sessionService.getSessionById(sessionId);
+        if (refreshed) {
+          await this.processNextStep(refreshed, roomName);
         }
       } catch (error) {
-        this.logger.error(`[Silence] Error auto-skipping Q${questionNumber}:`, error.message);
+        this.logger.error(`[Silence] Error handling Q${questionNumber}:`, error.message);
       }
     }, this.SILENCE_TIMEOUT_MS);
 

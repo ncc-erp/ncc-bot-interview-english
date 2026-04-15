@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventSource } from 'eventsource';
-import axios from 'axios';
 import { AgentService } from '@/agent/agent.provider';
 import { InterviewSessionService } from '@/interviewer/interview-session.service';
 import { EnhancedInterviewerService } from '@/interviewer/interview.service';
@@ -38,6 +37,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private readonly answerDebounceTimers = new Map<string, NodeJS.Timeout>();
   private readonly pendingTranscripts = new Map<string, string[]>();
   private readonly ANSWER_DEBOUNCE_MS = 4000;
+  private readonly MAX_REASK_COUNT = 2;
 
   // Track active rooms: room_name → session_id
   // This is in-memory fast lookup; source of truth is DB (roomName field)
@@ -46,6 +46,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   // Silence timer: after bot asks a question, if no answer in 15s → skip to next
   private readonly silenceTimers = new Map<string, NodeJS.Timeout>();
   private readonly SILENCE_TIMEOUT_MS = 15_000;
+
+  private readonly roomIds = new Map<string, string>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -127,6 +129,10 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const roomId = data.room?.room_id;
 
     this.logger.log(`[Metadata] event_type=${eventType} room=${roomName}`);
+
+    if (roomName && roomId) {
+      this.roomIds.set(roomName, roomId);
+    }
 
     switch (eventType) {
       case 'room_started':
@@ -248,6 +254,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.pendingTranscripts.delete(roomName);
     this.clearSilenceTimer(roomName);
     this.roomSessionMap.delete(roomName);
+    this.roomIds.delete(roomName);
   }
 
   // ─────────────────────────────────────────────
@@ -352,6 +359,34 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     try {
       this.logger.log(`🚀 *start from ${participantIdentity} in room ${roomName}`);
 
+      // Check if already active room
+      const roomId = this.roomIds.get(roomName);
+      if (!roomId) {
+        await this.sendChatMessage(
+          roomName,
+          '⏳ Room metadata is not ready yet. Please try *start again in a moment.'
+        );
+        return;
+      }
+
+      const participants = await this.getRoomParticipants(roomId);
+      const starterParticipant = participants.find((participant) =>
+        this.isMatchingParticipant(participant, participantIdentity),
+      );
+      const isStarterInRoom = !!starterParticipant;
+
+      if (!isStarterInRoom) {
+        this.logger.warn(
+          `[Start] Participant ${participantIdentity} not found in room ${roomName} (${roomId})`
+        );
+        await this.sendChatMessage(
+          roomName,
+          '❌ Could not verify that you are in this room. Please rejoin the room and try again.'
+        );
+        return;
+      }
+      const starterDisplayName = this.getParticipantDisplayName(starterParticipant, participantIdentity);
+
       // Check if already active session for this room
       const existing = await this.sessionService.getSessionByRoomName(roomName);
       if (existing && (existing.status === 'in_progress' || existing.status === 'pending')) {
@@ -386,7 +421,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       const session = await this.sessionService.createSession(
         participantIdentity,
-        participantIdentity,
+        starterDisplayName,
         roomName,
         roomName,
         selectedTemplate.id,
@@ -625,10 +660,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   }
 
   private startSilenceTimer(
-    roomName: string,
-    sessionId: string,
-    questionNumber: number,
-    totalQuestions: number,
+      roomName: string,
+      sessionId: string,
+      questionNumber: number,
+      totalQuestions: number,
+      retryCount = 0,
   ): void {
     this.clearSilenceTimer(roomName);
 
@@ -637,23 +673,45 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(`[Silence] No answer for Q${questionNumber} in room ${roomName} after ${this.SILENCE_TIMEOUT_MS}ms — skipping`);
 
       try {
+        const session = await this.sessionService.getSessionById(sessionId);
+        if (!session) return;
+
+        if (retryCount < this.MAX_REASK_COUNT) {
+          const currentQuestion =
+              session.messages
+                  ?.filter((m: any) =>
+                      m.role === MessageRole.ASSISTANT &&
+                      m.questionIndex === questionNumber
+                  )
+                  ?.at(-1)?.content;
+
+          const repeatText = currentQuestion || await this.interviewerService.generateQuestion(session, questionNumber);
+
+          await this.sendChatMessage(roomName, `I didn't hear your answer. Let me repeat the question.`);
+          await this.agentService.sendTTS(roomName, repeatText);
+          await this.sendChatMessage(roomName, `❓ **Question ${questionNumber}/${totalQuestions}:**\n${repeatText}`);
+
+          this.startSilenceTimer(roomName, sessionId, questionNumber, totalQuestions, retryCount + 1);
+          return;
+        }
+
         await this.sendChatMessage(roomName, `⏭️ No answer detected, moving to next question...`);
 
         // Save a placeholder answer so currentQuestionIndex advances
         await this.sessionService.addMessage(
-          sessionId,
-          MessageRole.USER,
-          '[No answer — skipped due to silence]',
-          MessageType.AUDIO,
-          questionNumber,
+            sessionId,
+            MessageRole.USER,
+            '[No answer — skipped due to silence]',
+            MessageType.AUDIO,
+            questionNumber,
         );
 
-        const session = await this.sessionService.getSessionById(sessionId);
-        if (session) {
-          await this.processNextStep(session, roomName);
+        const refreshed = await this.sessionService.getSessionById(sessionId);
+        if (refreshed) {
+          await this.processNextStep(refreshed, roomName);
         }
       } catch (error) {
-        this.logger.error(`[Silence] Error auto-skipping Q${questionNumber}:`, error.message);
+        this.logger.error(`[Silence] Error handling Q${questionNumber}:`, error.message);
       }
     }, this.SILENCE_TIMEOUT_MS);
 
@@ -698,6 +756,42 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async getRoomParticipants(roomId: string): Promise<any[]> {
+    const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
+    const url = `${baseUrl}/api/rooms/participant/${encodeURIComponent(roomId)}`;
+
+    const response = await this.axiosClient.getInstance().get(url);
+    const data = response.data;
+
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.participants)) return data.participants;
+    if (Array.isArray(data?.data)) return data.data;
+    if (Array.isArray(data?.data?.participants)) return data.data.participants;
+
+    this.logger.warn(`[Participants] Unexpected response format for room ${roomId}`);
+    return [];
+  }
+
+  private isMatchingParticipant(participant: any, participantIdentity: string): boolean {
+    const target = String(participantIdentity || '').trim();
+    if (!target) return false;
+
+    const identity = String(participant?.identity || '').trim();
+    const participantIdentityField = String(participant?.participant_identity || '').trim();
+    const extName = String(participant?.metadata?.extName || '').trim();
+    const extId = String(participant?.metadata?.extId || '').trim();
+
+    return [identity, participantIdentityField, extName, extId].includes(target);
+  }
+
+  private getParticipantDisplayName(participant: any, fallback: string): string {
+    const extName = String(participant?.metadata?.extName || '').trim();
+    const name = String(participant?.name || '').trim();
+    const identity = String(participant?.identity || '').trim();
+
+    return extName || name || identity || fallback;
+  }
+
   public closeTranscriptForRoom(roomName: string): void {
     const es = this.transcriptSSEs.get(roomName);
     if (es) {
@@ -709,5 +803,6 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.pendingTranscripts.delete(roomName);
     this.clearSilenceTimer(roomName);
     this.roomSessionMap.delete(roomName);
+    this.roomIds.delete(roomName);
   }
 }

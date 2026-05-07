@@ -19,6 +19,8 @@ import { AIService } from "./ai.service";
 import { ChatService } from "./chat.service";
 import { AxiosClient } from "@/shared/lib/axios-client";
 import { ScoringService } from "./scoring.service";
+import { AudioMergeCronService } from "@/record-audio/audio-merge-cron.service";
+import { MinioService } from "@/record-audio/minio.service";
 
 // const checkpointer = new MemorySaver();
 
@@ -40,6 +42,8 @@ import { ScoringService } from "./scoring.service";
     ChatService,
     ScoringService,
     AxiosClient,
+    AudioMergeCronService,
+    MinioService,
   ],
   exports: [ TemplateService,
     InterviewSessionService,

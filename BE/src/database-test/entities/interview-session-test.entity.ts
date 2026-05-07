@@ -8,6 +8,7 @@ export enum SessionStatus {
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+  FINISHED_SESSION = 'finished_session',
 }
 
 export enum SessionMode {
@@ -35,6 +36,9 @@ export class InterviewSession {
 
   @Column()
   channelId: string;
+
+  @Column({ nullable: true }) 
+  roomId: string;
 
   @Column({ nullable: true })
   roomName: string; // Voice room name/meeting code

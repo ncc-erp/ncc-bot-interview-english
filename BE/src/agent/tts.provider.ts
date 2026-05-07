@@ -1,3 +1,4 @@
+import { BotAuthService } from '@/auth/bot-auth.service';
 import { Injectable, Logger } from "@nestjs/common";
 import { Account } from "./agent.type";
 import { ConfigService } from "@nestjs/config";
@@ -14,10 +15,16 @@ export class TTSProvider {
 
   constructor(
     private configService: ConfigService,
-    private axiosClient: AxiosClient
+    private axiosClient: AxiosClient,
+    private botAuthService: BotAuthService
   ) {}
 
+  private authToken: string | null = null;
+
   async callTTSAPI(roomName: string, text: string, agentId?: string): Promise<void> {
+    if (!this.authToken) {
+      this.authToken = await this.botAuthService.getValidAccessToken();
+    }
     try {
       await appendFile(this.logFilePath, text, "utf-8");
     } catch (error) {
@@ -42,7 +49,11 @@ export class TTSProvider {
     try {
       const response = await this.axiosClient
         .getInstance()
-        .post(`${baseurl}/api/dispatch/agent-request`, payload);
+        .post(`${baseurl}/api/v2/dispatch/agent-request`, payload, {
+          headers: {
+            Authorization: `Bearer ${this.authToken}`,
+          },
+        });
 
       this.logger.verbose(
         `[TTS] API response for room ${roomName}:`,

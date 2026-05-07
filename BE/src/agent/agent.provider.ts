@@ -16,6 +16,8 @@ import { TTSProvider } from "./tts.provider";
 import { EnhancedInterviewerService } from "@/interviewer/interview.service";
 import { InterviewSessionService } from "@/interviewer/interview-session.service";
 import { MessageRole, MessageType } from "@/database-test/entities/session-message.entity";
+import { BotAuthService } from "@/auth/bot-auth.service";
+import { EventSourcePolyfill } from 'event-source-polyfill';
 
 interface VoiceBuffer {
   chunks: string[];
@@ -72,6 +74,7 @@ export class AgentService {
     private readonly interviewer: EnhancedInterviewerService,
     private readonly ttsService: TTSProvider,
     private readonly sessionService: InterviewSessionService,
+    private readonly botAuthService: BotAuthService,
   ) { }
 
   /**
@@ -88,11 +91,16 @@ export class AgentService {
     try {
       const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
       const agentId = this.roomAgents.get(roomName);
+      var authToken = await this.botAuthService.getValidAccessToken();
       this.logger.log(`🎙️ Enabling transcript for room ${roomName}...`);
-      await this.axiosClient.getInstance().post(`${baseurl}/api/dispatch/agent-request`, {
+      await this.axiosClient.getInstance().post(`${baseurl}/api/v2/dispatch/agent-request`, {
         room_name: roomName,
         agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
         payload: { request_type: 'transcript_control', action: 'enable' },
+      }, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
       });
       this.logger.log(`✅ Transcript enabled for room ${roomName}`);
     } catch (error) {
@@ -108,11 +116,16 @@ export class AgentService {
     try {
       const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
       const agentId = this.roomAgents.get(roomName);
+      var authToken = await this.botAuthService.getValidAccessToken();
       this.logger.log(`🔇 Disabling transcript for room ${roomName}...`);
-      await this.axiosClient.getInstance().post(`${baseurl}/api/dispatch/agent-request`, {
+      await this.axiosClient.getInstance().post(`${baseurl}/api/v2/dispatch/agent-request`, {
         room_name: roomName,
         agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
         payload: { request_type: 'transcript_control', action: 'disable' },
+      }, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
       });
       this.logger.log(`✅ Transcript disabled for room ${roomName}`);
     } catch (error) {
@@ -260,7 +273,7 @@ export class AgentService {
         meeting_code
       );
 
-      this.createSSEConnection(sseUrl, meeting_code, account, client);
+      await this.createSSEConnection(sseUrl, meeting_code, account, client);
 
       // NEW: Enable transcript after bot joins
       try {
@@ -627,7 +640,7 @@ Type your answer or speak in the voice room...`;
     this.cleanupProcessedMessages();
   }
 
-  private createSSEConnection(
+  private async createSSEConnection(
     sseUrl: string,
     meeting_code: string,
     account: Account,
@@ -635,9 +648,14 @@ Type your answer or speak in the voice room...`;
     retry = 0,
   ) {
     const sseKey = `${account.appid}-${meeting_code}`;
+    var authToken = await this.botAuthService.getValidAccessToken();
 
     this.logger.log(`🔌 Creating SSE connection (retry=${retry}) for room ${meeting_code}`);
-    const es = new EventSource(sseUrl);
+    const es = new EventSourcePolyfill(sseUrl, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
 
     es.onopen = () => {
       this.logger.log(`✅ SSE connection OPENED for room ${meeting_code}`);
@@ -687,7 +705,7 @@ Type your answer or speak in the voice room...`;
         );
 
         setTimeout(() => {
-          this.createSSEConnection(
+          void this.createSSEConnection(
             sseUrl,
             meeting_code,
             account,

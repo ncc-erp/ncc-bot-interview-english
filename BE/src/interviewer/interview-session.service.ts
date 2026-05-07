@@ -31,6 +31,7 @@ export class InterviewSessionService {
     templateId: string,
     mode: SessionMode = SessionMode.TEXT,
     isExternal = false,
+    roomId: string = null,
   ): Promise<InterviewSession> {
     // Find or create user
     const user = await this.userService.findOrCreateUser(mezonUserId, username);
@@ -88,6 +89,7 @@ export class InterviewSessionService {
       selectedQuestions,
       selectedSections,
       isExternal,
+      roomId,
     });
 
     const savedSession = await this.sessionRepo.save(session);
@@ -556,5 +558,45 @@ export class InterviewSessionService {
 
     await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });
     this.logger.log(`Updated overall score to ${totalScore}/10 for session ${sessionId}`);
+  }
+
+  /**
+   * End session by setting status to FINISHED_SESSION
+   * @param sessionId 
+   * @returns 
+   */
+  async endSession(sessionId: string): Promise<InterviewSession> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+      select: ['id'],
+    });
+
+    if (!session) {
+      throw new BadRequestException('Session not found');
+    }
+
+    await this.sessionRepo.update(
+      { id: sessionId },
+      {
+        status: SessionStatus.FINISHED_SESSION
+      }
+    );
+    this.logger.log(`Finished session ${sessionId}`);
+
+    return this.getSessionById(sessionId);
+  }
+
+  /**
+   * Find sessions that need audio merging
+   */
+  async findSessionsNeedMergedAudio(): Promise<InterviewSession[]> {
+    return this.sessionRepo
+      .createQueryBuilder("s")
+      .where("s.status = :status", {
+        status: SessionStatus.FINISHED_SESSION,
+      })
+      .andWhere("s.audioFile IS NULL")
+      .andWhere("s.audioFilePaths = '[]'::jsonb")
+      .getMany();
   }
 }

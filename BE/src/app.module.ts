@@ -10,7 +10,8 @@ import { DatabaseTestModule } from "./database-test/database-test.module";
 import { RecordAudioModule } from "./record-audio/record-audio.module";
 import { OrchestratorModule } from "./orchestrator/orchestrator.module";
 import { AdminModule } from "./admin/admin.module";
-
+import { BotAuthModule } from "./auth/bot-auth.module";
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -52,6 +53,8 @@ import { AdminModule } from "./admin/admin.module";
     EnglishTestModule,
     RecordAudioModule,
     OrchestratorModule,
+    BotAuthModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [],
   providers: [],

@@ -355,7 +355,7 @@ ${nextQuestion}
 
       this.logger.log(`✅ Interview ready - waiting for user's first message`);
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Error starting interview:', error);
       await message.update(
         SmartMessage.text(`❌ **Failed to start interview**\n\n${error.message}\n\nPlease try again with *start`)

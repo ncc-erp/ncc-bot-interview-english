@@ -593,7 +593,7 @@ export class InterviewSessionService {
     return this.sessionRepo
       .createQueryBuilder("s")
       .where("s.status IN (:...statuses)", {
-        statuses: [SessionStatus.FINISHED_SESSION, SessionStatus.COMPLETED],
+        statuses: [SessionStatus.FINISHED_SESSION],
       })
       .andWhere("s.audioFile IS NULL")
       .andWhere("s.audioFilePaths = '[]'::jsonb")

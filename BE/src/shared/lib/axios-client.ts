@@ -1,12 +1,16 @@
 import { Injectable, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios, { AxiosInstance } from "axios";
+import { BotAuthService } from '@/auth/bot-auth.service';
 
 @Injectable()
 export class AxiosClient implements OnModuleInit {
   private instance: AxiosInstance | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly botAuthService: BotAuthService
+  ) {}
 
   onModuleInit() {
     const baseURL = this.configService.get<string>("AGENT_BASE_URL")!;
@@ -18,6 +22,17 @@ export class AxiosClient implements OnModuleInit {
       },
       timeout: 30000,
     });
+
+    this.instance.interceptors.request.use(
+      async (config) => {
+        const token = await this.botAuthService.getValidAccessToken();
+
+        config.headers.Authorization = `Bearer ${token}`;
+
+        return config;
+      },
+      (error) => Promise.reject(error),
+    );
 
     this.instance.interceptors.response.use(
       (response) => response,

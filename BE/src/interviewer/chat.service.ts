@@ -125,11 +125,12 @@ export class ChatService {
 
     try {
       await this.axiosClient.getInstance().post(
-        `${baseUrl}/api/chat_external/send_message`,
-        { account: { appid, token }, room_name: roomName, text },
+        `${baseUrl}/api/v2/chat_external/send_message`,
+        { room_name: roomName, text },
       );
+      this.logger.log(`✅ /api/v2/chat_external/send_message`);
       this.logger.log(`✅ Sent external chat message to room ${roomName}`);
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to send external chat message to room ${roomName}:`, error.message);
       throw error;
     }

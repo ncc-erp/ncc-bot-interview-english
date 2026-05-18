@@ -592,8 +592,8 @@ export class InterviewSessionService {
   async findSessionsNeedMergedAudio(): Promise<InterviewSession[]> {
     return this.sessionRepo
       .createQueryBuilder("s")
-      .where("s.status = :status", {
-        status: SessionStatus.FINISHED_SESSION,
+      .where("s.status IN (:...statuses)", {
+        statuses: [SessionStatus.FINISHED_SESSION, SessionStatus.COMPLETED],
       })
       .andWhere("s.audioFile IS NULL")
       .andWhere("s.audioFilePaths = '[]'::jsonb")

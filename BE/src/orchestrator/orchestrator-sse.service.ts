@@ -84,7 +84,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
     const url = `${baseUrl}/api/v2/sse/metadata`;
 
-    this.logger.log('📡 Subscribing SSE /api/sse/metadata...');
+    this.logger.log('📡 Subscribing SSE /api/v2/sse/metadata...');
     const es = new EventSourcePolyfill(url, {
       headers: {
         Authorization: `Bearer ${this.authToken}`,
@@ -92,7 +92,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     });
 
     es.onopen = () => {
-      this.logger.log('✅ SSE /api/sse/metadata connected');
+      this.logger.log('✅ SSE /api/v2/sse/metadata connected');
       this.metadataRetryCount = 0;
     };
 
@@ -105,10 +105,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       }
     };
 
-    es.onerror = () => {
+    es.onerror = async () => {
       this.logger.error('[Metadata SSE] Connection error, will retry...');
       es.close();
       this.metadataSSE = null;
+      this.authToken = await this.botAuthService.getValidAccessToken();
       this.scheduleMetadataRetry();
     };
 
@@ -210,10 +211,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       }
     };
 
-    es.onerror = () => {
+    es.onerror = async () => {
       this.logger.error('[ChatExternal SSE] Connection error, will retry...');
       es.close();
       this.chatExternalSSE = null;
+      this.authToken = await this.botAuthService.getValidAccessToken();
       this.scheduleChatRetry();
     };
 
@@ -226,7 +228,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.MAX_RETRY_DELAY_MS,
     );
     this.chatRetryCount++;
-    this.logger.warn(`🔄 Retrying /api/sse/chat_external in ${delay}ms (attempt ${this.chatRetryCount})`);
+    this.logger.warn(`🔄 Retrying /api/v2/sse/chat_external in ${delay}ms (attempt ${this.chatRetryCount})`);
     this.chatRetryTimer = setTimeout(() => this.subscribeChatExternal(), delay);
   }
 
@@ -463,10 +465,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       }
     };
 
-    es.onerror = () => {
+    es.onerror = async () => {
       this.logger.error(`[Transcript SSE][${roomName}] Error`);
       es.close();
       this.transcriptSSEs.delete(roomName);
+      this.authToken = await this.botAuthService.getValidAccessToken();
 
       // Only retry if session still active
       if (this.roomSessionMap.has(roomName) && retry < 5) {
@@ -677,11 +680,6 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
             message: text,
             sender_name: 'Interview Bot',
           },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.authToken}`,
-          },
         }
       );
     } catch (error: any) {
@@ -693,11 +691,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
     const url = `${baseUrl}/api/v2/rooms/participant/${encodeURIComponent(roomId)}`;
 
-    const response = await this.axiosClient.getInstance().get(url, {
-      headers: {
-        Authorization: `Bearer ${this.authToken}`,
-      },
-    });
+    const response = await this.axiosClient.getInstance().get(url);
     const data = response.data;
 
     if (Array.isArray(data)) return data;

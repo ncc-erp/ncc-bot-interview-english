@@ -34,11 +34,7 @@ export class AudioMergeCronService {
 				const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
 				const url = `${baseUrl}/api/v2/rooms/audio_info/${session.roomId}`;
 				try {
-					const response = await this.axiosClient.getInstance().get(url, {
-						headers: {
-							Authorization: `Bearer ${authToken}`
-						}
-					});
+					const response = await this.axiosClient.getInstance().get(url);
 					const fileResults = response.data.file_results || [];
 					await this.mergeRoomAudio(session, fileResults);
 				} catch (error) {

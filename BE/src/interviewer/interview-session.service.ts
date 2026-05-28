@@ -543,7 +543,12 @@ export class InterviewSessionService {
    * Update totalScore inside overallFeedback after AI scoring completes
    * Merges with existing overallFeedback to preserve overall/strengths/improvements
    */
-  async updateOverallScore(sessionId: string, totalScore: number): Promise<void> {
+  async updateOverallScore(
+    sessionId: string,
+    totalScore: number,
+    star?: number,
+    starReason?: string,
+  ): Promise<void> {
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
       select: ['id', 'overallFeedback'],
@@ -554,10 +559,16 @@ export class InterviewSessionService {
     const updated = {
       ...(session.overallFeedback || {}),
       totalScore,
+      ...(star !== undefined ? { star } : {}),
+      ...(starReason !== undefined ? { starReason } : {}),
     };
 
     await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });
-    this.logger.log(`Updated overall score to ${totalScore}/10 for session ${sessionId}`);
+    this.logger.log(
+      `Updated overall score to ${totalScore}/10` +
+      (star !== undefined ? `, star to ${star}/5` : '') +
+      ` for session ${sessionId}`
+    );
   }
 
   /**

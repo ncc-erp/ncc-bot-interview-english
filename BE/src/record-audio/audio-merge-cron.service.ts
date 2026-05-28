@@ -100,6 +100,7 @@ export class AudioMergeCronService {
               totalScore,
               evaluation.star,
               evaluation.starReason,
+              evaluation.criteria,
             );
             this.logger.log(
               `[Scoring] Overall score: ${totalScore}/10, star: ${evaluation.star}/5 for session ${session.id}`

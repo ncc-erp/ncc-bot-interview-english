@@ -548,6 +548,13 @@ export class InterviewSessionService {
     totalScore: number,
     star?: number,
     starReason?: string,
+    criteria?: {
+      contentDepthAccuracy: string;
+      fluencySpeakingFlow: string;
+      pronunciationClarity: string;
+      grammarVocabulary: string;
+      confidence: string;
+    },
   ): Promise<void> {
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
@@ -561,6 +568,7 @@ export class InterviewSessionService {
       totalScore,
       ...(star !== undefined ? { star } : {}),
       ...(starReason !== undefined ? { starReason } : {}),
+      ...(criteria !== undefined ? { criteria } : {}),
     };
 
     await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });

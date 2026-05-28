@@ -27,6 +27,13 @@ export interface InterviewEvaluationResult {
   star: number;
   starReason: string;
   questionScores: QuestionScore[];
+  criteria?: {
+    contentDepthAccuracy: string;
+    fluencySpeakingFlow: string;
+    pronunciationClarity: string;
+    grammarVocabulary: string;
+    confidence: string;
+  };
 }
 
 // Gemini inline audio limit: 20MB
@@ -142,7 +149,15 @@ export class ScoringService {
       '- 2 Stars (2*): Elementary level. The candidate can perform a basic self-introduction in English and provide short answers (usually 1-2 sentences) to questions. They can discuss basic topics such as their background, experience, tech stack, and daily tasks (or for interns, self-study, learning new technologies, and career goals). Requires a recognizable accent/pronunciation.',
       '- 3 Stars (3*): Intermediate level. The candidate can introduce themselves and answer questions with 1-2 sentences. In addition to basic topics from Level 2, they can describe their projects, development processes, project challenges, and how they resolved them.',
       '- 4 Stars (4*): Upper-intermediate level. Either the candidate has a good accent but struggles to articulate/develop their ideas clearly (unclear phrasing rather than lack of vocabulary); OR their accent is weak/non-standard but their ideas are well-structured, detailed, and highly coherent.',
-      '- 5 Stars (5*): Advanced/Fluent level. The candidate communicates highly fluently and confidently. They provide accurate, comprehensive, and persuasive answers with a natural US/UK accent and correct pronunciation.',
+      '- 5 Stars (5*): Advanced/Fluent level. The candidate communicates highly fluently and confidently. They provide accurate, comprehensive, and persuasive answers with clear, natural, and easily understandable pronunciation.',
+      '',
+      'OVERALL COMMUNICATION CRITERIA (adjectives: Excellent, Very Good, Good, Basic, Needs Improvement):',
+      'Evaluate the candidate holistically for the entire interview on these 5 criteria based on their speaking flow, accent/pronunciation, and content depth:',
+      '1. Content Depth & Accuracy: Relevance and detailed technical explanations',
+      '2. Fluency & Speaking Flow: Pacing, pauses, hesitation, and flow',
+      '3. Pronunciation & Clarity: Enunciation, accent, and clear speech clarity',
+      '4. Grammar & Vocabulary: Accuracy, lexical variety, and correct sentence construction',
+      '5. Confidence: Delivery tone, assertiveness, and speech confidence',
       '',
       'RULES:',
       '- Evaluate based on what you HEAR directly from the audio',
@@ -155,6 +170,13 @@ export class ScoringService {
       '{',
       '  "star": 4,',
       '  "starReason": "Short explanation in English explaining why the candidate received this star rating (1-2 sentences)",',
+      '  "criteria": {',
+      '    "contentDepthAccuracy": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "fluencySpeakingFlow": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "pronunciationClarity": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "grammarVocabulary": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "confidence": "Excellent | Very Good | Good | Basic | Needs Improvement"',
+      '  },',
       '  "questionScores": [',
       '    {',
       '      "questionNumber": 1,',
@@ -196,7 +218,7 @@ export class ScoringService {
     const audioData = fs.readFileSync(filePath).toString('base64');
 
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         contents: [{
           parts: [
@@ -271,7 +293,7 @@ export class ScoringService {
 
     // Step 3: Generate content with file reference
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         contents: [{
           parts: [
@@ -341,10 +363,25 @@ export class ScoringService {
       const starReason = String(parsed.starReason || 'No reasoning provided.');
       const questionScores = Array.isArray(parsed.questionScores) ? parsed.questionScores : [];
 
+      const criteria = parsed.criteria ? {
+        contentDepthAccuracy: String(parsed.criteria.contentDepthAccuracy || 'Basic'),
+        fluencySpeakingFlow: String(parsed.criteria.fluencySpeakingFlow || 'Basic'),
+        pronunciationClarity: String(parsed.criteria.pronunciationClarity || 'Basic'),
+        grammarVocabulary: String(parsed.criteria.grammarVocabulary || 'Basic'),
+        confidence: String(parsed.criteria.confidence || 'Basic'),
+      } : {
+        contentDepthAccuracy: 'Basic',
+        fluencySpeakingFlow: 'Basic',
+        pronunciationClarity: 'Basic',
+        grammarVocabulary: 'Basic',
+        confidence: 'Basic',
+      };
+
       return {
         star,
         starReason,
         questionScores,
+        criteria,
       };
     } catch (err) {
       this.logger.error(
@@ -361,6 +398,13 @@ export class ScoringService {
           score: 0,
           feedback: 'Scoring failed — AI response could not be parsed',
         })),
+        criteria: {
+          contentDepthAccuracy: 'Basic',
+          fluencySpeakingFlow: 'Basic',
+          pronunciationClarity: 'Basic',
+          grammarVocabulary: 'Basic',
+          confidence: 'Basic',
+        },
       };
     }
   }

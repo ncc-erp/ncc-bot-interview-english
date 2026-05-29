@@ -77,6 +77,15 @@ export class InterviewSession {
     strengths: string[];
     improvements: string[];
     totalScore: number;
+    star?: number;
+    starReason?: string;
+    criteria?: {
+      contentDepthAccuracy: string;
+      fluencySpeakingFlow: string;
+      pronunciationClarity: string;
+      grammarVocabulary: string;
+      confidence: string;
+    };
   };
 
   // Per-question scoring
@@ -85,6 +94,13 @@ export class InterviewSession {
     questionNumber: number;
     question: string;
     answer: string;
+    criteria?: {
+      relevance: number;
+      contentDepth: number;
+      fluency: number;
+      grammarVocabulary: number;
+      structure: number;
+    };
     score: number;
     feedback: string;
   }[];

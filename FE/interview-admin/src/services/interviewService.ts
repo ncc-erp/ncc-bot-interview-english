@@ -20,6 +20,15 @@ export interface OverallFeedback {
   strengths: string[];
   improvements: string[];
   totalScore: number;
+  star?: number;
+  starReason?: string;
+  criteria?: {
+    contentDepthAccuracy: string;
+    fluencySpeakingFlow: string;
+    pronunciationClarity: string;
+    grammarVocabulary: string;
+    confidence: string;
+  };
 }
 
 export interface QuestionScore {

@@ -23,6 +23,19 @@ export interface QuestionScore {
   feedback: string;        // 2-3 sentences
 }
 
+export interface InterviewEvaluationResult {
+  star: number;
+  starReason: string;
+  questionScores: QuestionScore[];
+  criteria?: {
+    contentDepthAccuracy: string;
+    fluencySpeakingFlow: string;
+    pronunciationClarity: string;
+    grammarVocabulary: string;
+    confidence: string;
+  };
+}
+
 // Gemini inline audio limit: 20MB
 const GEMINI_INLINE_LIMIT_BYTES = 20 * 1024 * 1024;
 const TMP_DIR = 'tmp/scoring';
@@ -45,7 +58,7 @@ export class ScoringService {
     sessionId: string,
     mergedAudioUrl: string,
     questions: string[],
-    onComplete: (scores: QuestionScore[]) => Promise<void>,
+    onComplete: (evaluation: InterviewEvaluationResult) => Promise<void>,
   ): Promise<void> {
     const tmpFile = path.join(TMP_DIR, `${sessionId}-${Date.now()}.m4a`);
 
@@ -58,11 +71,11 @@ export class ScoringService {
       this.logger.log(`[Scoring] Downloaded: ${tmpFile} (${fileSize} bytes)`);
 
       // 2. Score directly from audio via Gemini (transcribe + score in 1 request)
-      const scores = await this.scoreWithGemini(tmpFile, fileSize, questions);
-      this.logger.log(`[Scoring] Scored ${scores.length} questions`);
+      const evaluation = await this.scoreWithGemini(tmpFile, fileSize, questions);
+      this.logger.log(`[Scoring] Scored ${evaluation.questionScores.length} questions. Star rating: ${evaluation.star}/5`);
 
       // 3. Save via callback
-      await onComplete(scores);
+      await onComplete(evaluation);
       this.logger.log(`[Scoring] Completed for session ${sessionId}`);
 
     } catch (error) {
@@ -84,9 +97,9 @@ export class ScoringService {
       protocol.get(url, (res) => {
         res.pipe(file);
         file.on('finish', () => { file.close(); resolve(); });
-        file.on('error', (err) => { fs.unlink(dest, () => {}); reject(err); });
+        file.on('error', (err) => { fs.unlink(dest, () => { }); reject(err); });
       }).on('error', (err) => {
-        fs.unlink(dest, () => {});
+        fs.unlink(dest, () => { });
         reject(err);
       });
     });
@@ -100,7 +113,7 @@ export class ScoringService {
     filePath: string,
     fileSize: number,
     questions: string[],
-  ): Promise<QuestionScore[]> {
+  ): Promise<InterviewEvaluationResult> {
     const apiKey = this.configService.get<string>('GOOGLE_API_KEY')!;
 
     const questionList = questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
@@ -130,28 +143,57 @@ export class ScoringService {
       '',
       'FINAL SCORE = sum of all criteria (rounded to 1 decimal, max 10)',
       '',
+      'OVERALL CANDIDATE STAR RATING (from 1 to 5 stars):',
+      'Evaluate the candidate\'s overall English proficiency and communication level for the ENTIRE interview based on these levels:',
+      '- 1 Star (1*): Basic entry level. The candidate is only able to introduce themselves in English using approximately 5-7 sentences and struggles or fails to answer subsequent questions.',
+      '- 2 Stars (2*): Elementary level. The candidate can perform a basic self-introduction in English and provide short answers (usually 1-2 sentences) to questions. They can discuss basic topics such as their background, experience, tech stack, and daily tasks (or for interns, self-study, learning new technologies, and career goals). Requires a recognizable accent/pronunciation.',
+      '- 3 Stars (3*): Intermediate level. The candidate can introduce themselves and answer questions with 1-2 sentences. In addition to basic topics from Level 2, they can describe their projects, development processes, project challenges, and how they resolved them.',
+      '- 4 Stars (4*): Upper-intermediate level. Either the candidate has a good accent but struggles to articulate/develop their ideas clearly (unclear phrasing rather than lack of vocabulary); OR their accent is weak/non-standard but their ideas are well-structured, detailed, and highly coherent.',
+      '- 5 Stars (5*): Advanced/Fluent level. The candidate communicates highly fluently and confidently. They provide accurate, comprehensive, and persuasive answers with clear, natural, and easily understandable pronunciation.',
+      '',
+      'OVERALL COMMUNICATION CRITERIA (adjectives: Excellent, Very Good, Good, Basic, Needs Improvement):',
+      'Evaluate the candidate holistically for the entire interview on these 5 criteria based on their speaking flow, accent/pronunciation, and content depth:',
+      '1. Content Depth & Accuracy: Relevance and detailed technical explanations',
+      '2. Fluency & Speaking Flow: Pacing, pauses, hesitation, and flow',
+      '3. Pronunciation & Clarity: Enunciation, accent, and clear speech clarity',
+      '4. Grammar & Vocabulary: Accuracy, lexical variety, and correct sentence construction',
+      '5. Confidence: Delivery tone, assertiveness, and speech confidence',
+      '',
       'RULES:',
       '- Evaluate based on what you HEAR directly from the audio',
       '- Identify the interviewer (bot) questions and candidate answers correctly',
       '- Score 0 + feedback "No answer found in recording" if answer not found',
       '- Be consistent: same quality = same score across questions',
-      '- Return ONLY a valid JSON array, no markdown fences, no extra text',
+      '- Return ONLY a valid JSON object, no markdown fences, no extra text',
       '',
-      'Return ONLY this JSON array format:',
-      '[{',
-      '  "questionNumber": 1,',
-      '  "question": "original question text",',
-      '  "answer": "candidate answer transcribed from audio",',
+      'Return ONLY this JSON object format (do not wrap it in markdown block, do not output anything other than this JSON):',
+      '{',
+      '  "star": 4,',
+      '  "starReason": "Short explanation in English explaining why the candidate received this star rating (1-2 sentences)",',
       '  "criteria": {',
-      '    "relevance": 2.5,',
-      '    "contentDepth": 2.0,',
-      '    "fluency": 1.5,',
-      '    "grammarVocabulary": 1.0,',
-      '    "structure": 0.5',
+      '    "contentDepthAccuracy": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "fluencySpeakingFlow": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "pronunciationClarity": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "grammarVocabulary": "Excellent | Very Good | Good | Basic | Needs Improvement",',
+      '    "confidence": "Excellent | Very Good | Good | Basic | Needs Improvement"',
       '  },',
-      '  "score": 7.5,',
-      '  "feedback": "1 sentences on strengths and specific areas to improve"',
-      '}]',
+      '  "questionScores": [',
+      '    {',
+      '      "questionNumber": 1,',
+      '      "question": "original question text",',
+      '      "answer": "candidate answer transcribed from audio",',
+      '      "criteria": {',
+      '        "relevance": 2.5,',
+      '        "contentDepth": 2.0,',
+      '        "fluency": 1.5,',
+      '        "grammarVocabulary": 1.0,',
+      '        "structure": 0.5',
+      '      },',
+      '      "score": 7.5,',
+      '      "feedback": "1 sentences on strengths and specific areas to improve"',
+      '    }',
+      '  ]',
+      '}',
     ].join('\n');
 
     let raw: string;
@@ -176,7 +218,7 @@ export class ScoringService {
     const audioData = fs.readFileSync(filePath).toString('base64');
 
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         contents: [{
           parts: [
@@ -194,7 +236,7 @@ export class ScoringService {
           maxOutputTokens: 8192,
         },
       },
-      { timeout: 120_000 },
+      { timeout: 180_000 },
     );
 
     return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -251,7 +293,7 @@ export class ScoringService {
 
     // Step 3: Generate content with file reference
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         contents: [{
           parts: [
@@ -264,11 +306,11 @@ export class ScoringService {
           maxOutputTokens: 8192,
         },
       },
-      { timeout: 120_000 },
+      { timeout: 180_000 },
     );
 
     // Cleanup uploaded file
-    this.deleteGeminiFile(apiKey, fileUri).catch(() => {});
+    this.deleteGeminiFile(apiKey, fileUri).catch(() => { });
 
     return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
@@ -303,31 +345,67 @@ export class ScoringService {
   // Parse response
   // ─────────────────────────────────────────────
 
-  private parseGeminiResponse(raw: string, questions: string[]): QuestionScore[] {
-    // Extract JSON array by finding first '[' and last ']',
+  private parseGeminiResponse(raw: string, questions: string[]): InterviewEvaluationResult {
+    // Extract JSON object by finding first '{' and last '}',
     // bypassing any markdown fences or preamble text from Gemini.
     try {
-      const start = raw.indexOf('[');
-      const end   = raw.lastIndexOf(']');
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
 
       if (start === -1 || end === -1 || end < start) {
-        throw new Error('No JSON array found in response');
+        throw new Error('No JSON object found in response');
       }
 
       const jsonStr = raw.slice(start, end + 1);
-      return JSON.parse(jsonStr) as QuestionScore[];
+      const parsed = JSON.parse(jsonStr);
+
+      const star = Math.max(1, Math.min(5, Number(parsed.star) || 1));
+      const starReason = String(parsed.starReason || 'No reasoning provided.');
+      const questionScores = Array.isArray(parsed.questionScores) ? parsed.questionScores : [];
+
+      const criteria = parsed.criteria ? {
+        contentDepthAccuracy: String(parsed.criteria.contentDepthAccuracy || 'Basic'),
+        fluencySpeakingFlow: String(parsed.criteria.fluencySpeakingFlow || 'Basic'),
+        pronunciationClarity: String(parsed.criteria.pronunciationClarity || 'Basic'),
+        grammarVocabulary: String(parsed.criteria.grammarVocabulary || 'Basic'),
+        confidence: String(parsed.criteria.confidence || 'Basic'),
+      } : {
+        contentDepthAccuracy: 'Basic',
+        fluencySpeakingFlow: 'Basic',
+        pronunciationClarity: 'Basic',
+        grammarVocabulary: 'Basic',
+        confidence: 'Basic',
+      };
+
+      return {
+        star,
+        starReason,
+        questionScores,
+        criteria,
+      };
     } catch (err) {
       this.logger.error(
-        `[Scoring] Failed to parse Gemini response (${err.message}): ${raw.substring(0)}`,
+        `[Scoring] Failed to parse Gemini response (${err.message}): ${raw}`,
       );
-      return questions.map((q, i) => ({
-        questionNumber: i + 1,
-        question: q,
-        answer: '',
-        criteria: { relevance: 0, contentDepth: 0, fluency: 0, grammarVocabulary: 0, structure: 0 },
-        score: 0,
-        feedback: 'Scoring failed — AI response could not be parsed',
-      }));
+      return {
+        star: 1,
+        starReason: 'Scoring failed — AI response could not be parsed',
+        questionScores: questions.map((q, i) => ({
+          questionNumber: i + 1,
+          question: q,
+          answer: '',
+          criteria: { relevance: 0, contentDepth: 0, fluency: 0, grammarVocabulary: 0, structure: 0 },
+          score: 0,
+          feedback: 'Scoring failed — AI response could not be parsed',
+        })),
+        criteria: {
+          contentDepthAccuracy: 'Basic',
+          fluencySpeakingFlow: 'Basic',
+          pronunciationClarity: 'Basic',
+          grammarVocabulary: 'Basic',
+          confidence: 'Basic',
+        },
+      };
     }
   }
 

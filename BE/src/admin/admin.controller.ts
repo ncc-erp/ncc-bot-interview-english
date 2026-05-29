@@ -1,16 +1,20 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
   HttpCode,
   HttpStatus,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, FindManyOptions } from 'typeorm';
 import { InterviewSession } from '@/database-test/entities/interview-session-test.entity';
 import { SessionMessage } from '@/database-test/entities/session-message.entity';
+import { ScoringService } from '@/interviewer/scoring.service';
+import { InterviewSessionService } from '@/interviewer/interview-session.service';
 
 export interface AdminSessionListQuery {
   page?: number;
@@ -49,6 +53,8 @@ export class AdminController {
     private readonly sessionRepo: Repository<InterviewSession>,
     @InjectRepository(SessionMessage)
     private readonly messageRepo: Repository<SessionMessage>,
+    private readonly scoringService: ScoringService,
+    private readonly sessionService: InterviewSessionService,
   ) {}
 
   /**
@@ -165,6 +171,79 @@ export class AdminController {
 
     session.messages = messages;
     return session;
+  }
+
+  /**
+   * POST /admin/sessions/:id/re-evaluate
+   * Triggers synchronous re-evaluation of the session audio via Gemini
+   */
+  @Post('sessions/:id/re-evaluate')
+  @HttpCode(HttpStatus.OK)
+  async reEvaluateSession(
+    @Param('id') id: string,
+  ): Promise<InterviewSession> {
+    const session = await this.sessionRepo.findOne({
+      where: { id },
+      relations: ['template'],
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Session ${id} not found`);
+    }
+
+    if (!session.audioFile) {
+      throw new BadRequestException(`Session ${id} does not have a merged audio URL for evaluation`);
+    }
+
+    const questions = session.selectedQuestions || [];
+    if (questions.length === 0) {
+      throw new BadRequestException(`Session ${id} does not have selected questions for evaluation`);
+    }
+
+    // 1. Run direct scoring (synchronously wait for API call)
+    const evaluation = await this.scoringService.scoreInterviewDirect(
+      session.id,
+      session.audioFile,
+      questions,
+    );
+
+    // 2. Save scores per question
+    await this.sessionService.saveQuestionScores(session.id, evaluation.questionScores);
+
+    // 3. Compute overall score
+    const validScores = evaluation.questionScores.filter(s => s.score > 0);
+    let totalScore = 0;
+    if (validScores.length > 0) {
+      const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
+      totalScore = Math.round(avg * 10) / 10;
+    }
+
+    // 4. Update overall score and feedback
+    await this.sessionService.updateOverallScore(
+      session.id,
+      totalScore,
+      evaluation.star,
+      evaluation.starReason,
+      evaluation.criteria,
+    );
+
+    // 5. Fetch updated session to return
+    const updatedSession = await this.sessionRepo.findOne({
+      where: { id },
+      relations: ['template', 'user'],
+    });
+    
+    // Load messages separately
+    const messages = await this.messageRepo.find({
+      where: { sessionId: id },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (updatedSession) {
+      updatedSession.messages = messages;
+    }
+
+    return updatedSession!;
   }
 
   /**

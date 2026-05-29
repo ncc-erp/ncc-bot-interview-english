@@ -124,6 +124,12 @@ export const getInterviewDetail = async (id: string): Promise<InterviewDetail> =
   return apiFetch(`/admin/sessions/${id}`);
 };
 
+export const reEvaluateInterview = async (id: string): Promise<InterviewDetail> => {
+  return apiFetch(`/admin/sessions/${id}/re-evaluate`, {
+    method: "POST",
+  });
+};
+
 export const getStats = async (): Promise<AdminStats> => {
   return apiFetch("/admin/stats");
 };

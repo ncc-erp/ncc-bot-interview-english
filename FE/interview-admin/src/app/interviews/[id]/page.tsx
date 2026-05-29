@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import {
   Card, Descriptions, Tag, Progress, Collapse, Typography,
-  Divider, Space, Tabs, Button, Spin, Alert, Rate,
+  Divider, Space, Tabs, Button, Spin, Alert, Rate, Popconfirm, message,
 } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
-import { getInterviewDetail, type InterviewDetail } from "@/services/interviewService";
+import { getInterviewDetail, reEvaluateInterview, type InterviewDetail } from "@/services/interviewService";
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -53,6 +53,21 @@ export default function InterviewDetailPage() {
   const [data, setData] = useState<InterviewDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reEvaluating, setReEvaluating] = useState(false);
+
+  const handleReEvaluate = async () => {
+    if (!id) return;
+    setReEvaluating(true);
+    try {
+      const updated = await reEvaluateInterview(id);
+      setData(updated);
+      message.success("Interview re-evaluation completed successfully!");
+    } catch (e: any) {
+      message.error(e.message || "Failed to re-evaluate interview");
+    } finally {
+      setReEvaluating(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -129,7 +144,31 @@ export default function InterviewDetailPage() {
       {/* Overall Feedback */}
       {data.overallFeedback && (
         <Card style={{ marginBottom: 16 }}>
-          <Divider plain style={{ marginTop: 0 }}>Results</Divider>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontWeight: 600, fontSize: 16 }}>Results</span>
+            {data.audioFile && (
+              <Popconfirm
+                title="Re-evaluate Session"
+                description="Are you sure you want to re-evaluate this session? This will call AI and overwrite the existing scores."
+                onConfirm={handleReEvaluate}
+                okText="Yes, Re-evaluate"
+                cancelText="No"
+                disabled={reEvaluating}
+              >
+                <Button
+                  size="small"
+                  type="primary"
+                  danger
+                  ghost
+                  icon={<ReloadOutlined />}
+                  loading={reEvaluating}
+                >
+                  Re-evaluate
+                </Button>
+              </Popconfirm>
+            )}
+          </div>
+          <Divider style={{ marginTop: 8, marginBottom: 16 }} />
 
           <div style={{ marginBottom: 16, display: "flex", flexDirection: "row" }}>
             <div style={{ width: "10%" }}>

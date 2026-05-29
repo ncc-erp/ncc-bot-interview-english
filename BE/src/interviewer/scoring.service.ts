@@ -85,6 +85,35 @@ export class ScoringService {
     }
   }
 
+  /**
+   * Runs the audio grading synchronously, returning the parsed evaluation result.
+   * Throws errors up to the caller.
+   */
+  async scoreInterviewDirect(
+    sessionId: string,
+    mergedAudioUrl: string,
+    questions: string[],
+  ): Promise<InterviewEvaluationResult> {
+    const tmpFile = path.join(TMP_DIR, `${sessionId}-${Date.now()}.m4a`);
+
+    try {
+      this.logger.log(`[Scoring Direct] Starting for session ${sessionId}`);
+
+      // 1. Download merged audio
+      await this.downloadFile(mergedAudioUrl, tmpFile);
+      const fileSize = fs.statSync(tmpFile).size;
+      this.logger.log(`[Scoring Direct] Downloaded: ${tmpFile} (${fileSize} bytes)`);
+
+      // 2. Score directly from audio via Gemini
+      const evaluation = await this.scoreWithGemini(tmpFile, fileSize, questions);
+      this.logger.log(`[Scoring Direct] Scored ${evaluation.questionScores.length} questions. Star rating: ${evaluation.star}/5`);
+
+      return evaluation;
+    } finally {
+      this.cleanup(tmpFile);
+    }
+  }
+
   // ─────────────────────────────────────────────
   // Download
   // ─────────────────────────────────────────────

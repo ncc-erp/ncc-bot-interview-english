@@ -20,6 +20,15 @@ export interface OverallFeedback {
   strengths: string[];
   improvements: string[];
   totalScore: number;
+  star?: number;
+  starReason?: string;
+  criteria?: {
+    contentDepthAccuracy: string;
+    fluencySpeakingFlow: string;
+    pronunciationClarity: string;
+    grammarVocabulary: string;
+    confidence: string;
+  };
 }
 
 export interface QuestionScore {
@@ -113,6 +122,12 @@ export const getInterviews = async (
 
 export const getInterviewDetail = async (id: string): Promise<InterviewDetail> => {
   return apiFetch(`/admin/sessions/${id}`);
+};
+
+export const reEvaluateInterview = async (id: string): Promise<InterviewDetail> => {
+  return apiFetch(`/admin/sessions/${id}/re-evaluate`, {
+    method: "POST",
+  });
 };
 
 export const getStats = async (): Promise<AdminStats> => {

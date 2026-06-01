@@ -3,20 +3,21 @@
 import { useEffect, useState } from "react";
 import {
   Card, Descriptions, Tag, Progress, Collapse, Typography,
-  Divider, Space, Tabs, Button, Spin, Alert,
+  Divider, Space, Tabs, Button, Spin, Alert, Rate, Popconfirm, message,
 } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
-import { getInterviewDetail, type InterviewDetail } from "@/services/interviewService";
+import { getInterviewDetail, reEvaluateInterview, type InterviewDetail } from "@/services/interviewService";
 
 const { Text } = Typography;
 const { Panel } = Collapse;
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  completed:   { label: "Completed",   color: "green" },
+  finished_session: { label: "Finished Session", color: "green" },
+  completed: { label: "Completed", color: "green" },
   in_progress: { label: "In Progress", color: "orange" },
-  pending:     { label: "Pending",     color: "blue" },
-  cancelled:   { label: "Cancelled",   color: "red" },
+  pending: { label: "Pending", color: "blue" },
+  cancelled: { label: "Cancelled", color: "red" },
 };
 
 function fmtDate(iso: string | null): string {
@@ -34,6 +35,16 @@ function fmtDuration(seconds: number | null): string {
   return `${m}m ${String(s).padStart(2, "0")}s`;
 }
 
+function getCriteriaColor(val: string): string {
+  const clean = val.toLowerCase().trim();
+  if (clean.includes("excellent")) return "green";
+  if (clean.includes("very good")) return "cyan";
+  if (clean.includes("good")) return "blue";
+  if (clean.includes("satisfactory")) return "orange";
+  if (clean.includes("needs improvement") || clean.includes("improvement")) return "red";
+  return "default";
+}
+
 export default function InterviewDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -42,6 +53,21 @@ export default function InterviewDetailPage() {
   const [data, setData] = useState<InterviewDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reEvaluating, setReEvaluating] = useState(false);
+
+  const handleReEvaluate = async () => {
+    if (!id) return;
+    setReEvaluating(true);
+    try {
+      const updated = await reEvaluateInterview(id);
+      setData(updated);
+      message.success("Interview re-evaluation completed successfully!");
+    } catch (e: any) {
+      message.error(e.message || "Failed to re-evaluate interview");
+    } finally {
+      setReEvaluating(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -118,25 +144,90 @@ export default function InterviewDetailPage() {
       {/* Overall Feedback */}
       {data.overallFeedback && (
         <Card style={{ marginBottom: 16 }}>
-          <Divider plain style={{ marginTop: 0 }}>Results</Divider>
-
-          <div style={{ marginBottom: 16 }}>
-            <Text strong>Total Score: </Text>
-            <Text
-              strong
-              style={{
-                fontSize: 22,
-                color: data.overallFeedback.totalScore >= 8
-                  ? "#52c41a"
-                  : data.overallFeedback.totalScore >= 6
-                  ? "#faad14"
-                  : "#ff4d4f",
-              }}
-            >
-              {data.overallFeedback.totalScore}
-            </Text>
-            <Text style={{ fontSize: 14, color: "#888" }}>/10</Text>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontWeight: 600, fontSize: 16 }}>Results</span>
+            {data.audioFile && (
+              <Popconfirm
+                title="Re-evaluate Session"
+                description="Are you sure you want to re-evaluate this session? This will call AI and overwrite the existing scores."
+                onConfirm={handleReEvaluate}
+                okText="Yes, Re-evaluate"
+                cancelText="No"
+                disabled={reEvaluating}
+              >
+                <Button
+                  size="small"
+                  type="primary"
+                  danger
+                  ghost
+                  icon={<ReloadOutlined />}
+                  loading={reEvaluating}
+                >
+                  Re-evaluate
+                </Button>
+              </Popconfirm>
+            )}
           </div>
+          <Divider style={{ marginTop: 8, marginBottom: 16 }} />
+
+          <div style={{ marginBottom: 16, display: "flex", flexDirection: "row" }}>
+            <div style={{ width: "10%" }}>
+              <Text strong>Total Score: </Text>
+              <Text
+                strong
+                style={{
+                  fontSize: 22,
+                  color: data.overallFeedback.totalScore >= 8
+                    ? "#52c41a"
+                    : data.overallFeedback.totalScore >= 6
+                      ? "#faad14"
+                      : "#ff4d4f",
+                }}
+              >
+                {data.overallFeedback.totalScore}
+              </Text>
+              <Text style={{ fontSize: 14, color: "#888" }}>/10</Text>
+            </div>
+
+            {data.overallFeedback.star !== undefined && data.overallFeedback.star !== null && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Text strong>Star Rating: </Text>
+                  <Rate disabled defaultValue={data.overallFeedback.star} />
+                </div>
+                {data.overallFeedback.starReason && (
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary" style={{ fontSize: 13, fontStyle: "italic" }}>
+                      {data.overallFeedback.starReason}
+                    </Text>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {data.overallFeedback.criteria && (
+            <div style={{ marginBottom: 16, padding: "12px 16px", border: "1px solid #f0f0f0", borderRadius: 8, background: "#fafafa" }}>
+              <Text strong style={{ display: "block", marginBottom: 10, fontSize: 13 }}>Overall Communication Criteria:</Text>
+              <Space wrap size={[8, 12]}>
+                <Tag color={getCriteriaColor(data.overallFeedback.criteria.contentDepthAccuracy)}>
+                  Content Depth & Accuracy: <strong>{data.overallFeedback.criteria.contentDepthAccuracy}</strong>
+                </Tag>
+                <Tag color={getCriteriaColor(data.overallFeedback.criteria.fluencySpeakingFlow)}>
+                  Fluency & Speaking Flow: <strong>{data.overallFeedback.criteria.fluencySpeakingFlow}</strong>
+                </Tag>
+                <Tag color={getCriteriaColor(data.overallFeedback.criteria.pronunciationClarity)}>
+                  Pronunciation & Clarity: <strong>{data.overallFeedback.criteria.pronunciationClarity}</strong>
+                </Tag>
+                <Tag color={getCriteriaColor(data.overallFeedback.criteria.grammarVocabulary)}>
+                  Grammar & Vocabulary: <strong>{data.overallFeedback.criteria.grammarVocabulary}</strong>
+                </Tag>
+                <Tag color={getCriteriaColor(data.overallFeedback.criteria.confidence)}>
+                  Confidence: <strong>{data.overallFeedback.criteria.confidence}</strong>
+                </Tag>
+              </Space>
+            </div>
+          )}
 
           {data.overallFeedback.overall && (
             <div style={{ marginBottom: 16, padding: "10px 12px", background: "#f0f8ff", borderRadius: 6, fontSize: 13 }}>

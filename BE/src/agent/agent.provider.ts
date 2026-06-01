@@ -91,16 +91,11 @@ export class AgentService {
     try {
       const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
       const agentId = this.roomAgents.get(roomName);
-      var authToken = await this.botAuthService.getValidAccessToken();
       this.logger.log(`🎙️ Enabling transcript for room ${roomName}...`);
       await this.axiosClient.getInstance().post(`${baseurl}/api/v2/dispatch/agent-request`, {
         room_name: roomName,
         agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
         payload: { request_type: 'transcript_control', action: 'enable' },
-      }, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
       });
       this.logger.log(`✅ Transcript enabled for room ${roomName}`);
     } catch (error) {
@@ -116,16 +111,11 @@ export class AgentService {
     try {
       const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
       const agentId = this.roomAgents.get(roomName);
-      var authToken = await this.botAuthService.getValidAccessToken();
       this.logger.log(`🔇 Disabling transcript for room ${roomName}...`);
       await this.axiosClient.getInstance().post(`${baseurl}/api/v2/dispatch/agent-request`, {
         room_name: roomName,
         agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
         payload: { request_type: 'transcript_control', action: 'disable' },
-      }, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
       });
       this.logger.log(`✅ Transcript disabled for room ${roomName}`);
     } catch (error) {

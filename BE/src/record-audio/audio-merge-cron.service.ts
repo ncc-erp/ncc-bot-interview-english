@@ -34,11 +34,7 @@ export class AudioMergeCronService {
 				const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
 				const url = `${baseUrl}/api/v2/rooms/audio_info/${session.roomId}`;
 				try {
-					const response = await this.axiosClient.getInstance().get(url, {
-						headers: {
-							Authorization: `Bearer ${authToken}`
-						}
-					});
+					const response = await this.axiosClient.getInstance().get(url);
 					const fileResults = response.data.file_results || [];
 					await this.mergeRoomAudio(session, fileResults);
 				} catch (error) {
@@ -89,17 +85,26 @@ export class AudioMergeCronService {
           session.id,
           mergedUrl,
           questions,
-          async (scores) => {
-            await this.sessionService.saveQuestionScores(session.id, scores);
+          async (evaluation) => {
+            await this.sessionService.saveQuestionScores(session.id, evaluation.questionScores);
 
             // Overall score = average of questions that have answers (score > 0)
-            const validScores = scores.filter(s => s.score > 0);
+            const validScores = evaluation.questionScores.filter(s => s.score > 0);
+            let totalScore = 0;
             if (validScores.length > 0) {
               const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
-              const totalScore = Math.round(avg * 10) / 10;
-              await this.sessionService.updateOverallScore(session.id, totalScore);
-              this.logger.log(`[Scoring] Overall score: ${totalScore}/10 for session ${session.id}`);
+              totalScore = Math.round(avg * 10) / 10;
             }
+            await this.sessionService.updateOverallScore(
+              session.id,
+              totalScore,
+              evaluation.star,
+              evaluation.starReason,
+              evaluation.criteria,
+            );
+            this.logger.log(
+              `[Scoring] Overall score: ${totalScore}/10, star: ${evaluation.star}/5 for session ${session.id}`
+            );
           },
         ).catch(err => this.logger.error(`[Scoring] Async error:`, err.message));
       } else {

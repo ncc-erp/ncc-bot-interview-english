@@ -7,6 +7,7 @@ const { Text } = Typography;
 const { Panel } = Collapse;
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  finished_session: { label: "Finished Session", color: "green" },
   completed:   { label: "Completed",   color: "green" },
   in_progress: { label: "In Progress", color: "orange" },
   pending:     { label: "Pending",     color: "blue" },

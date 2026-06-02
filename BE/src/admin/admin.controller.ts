@@ -9,6 +9,8 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  HttpException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, FindManyOptions } from 'typeorm';
@@ -49,6 +51,8 @@ export interface PaginatedResponse<T> {
 
 @Controller('admin')
 export class AdminController {
+  private readonly logger = new Logger(AdminController.name);
+
   constructor(
     @InjectRepository(InterviewSession)
     private readonly sessionRepo: Repository<InterviewSession>,
@@ -202,11 +206,27 @@ export class AdminController {
     }
 
     // 1. Run direct scoring (synchronously wait for API call)
-    const evaluation = await this.scoringService.scoreInterviewDirect(
-      session.id,
-      session.audioFile,
-      questions,
-    );
+    let evaluation;
+    try {
+      evaluation = await this.scoringService.scoreInterviewDirect(
+        session.id,
+        session.audioFile,
+        questions,
+      );
+    } catch (err: any) {
+      if (err.response) {
+        const status = err.response.status;
+        const msg = err.response.data?.error?.message || err.message || 'Gemini API Error';
+        this.logger.error(`Gemini API error during re-evaluation: ${status} - ${msg}`);
+        if (status === 429) {
+          throw new HttpException(`Gemini Rate Limit Exceeded: ${msg}`, HttpStatus.TOO_MANY_REQUESTS);
+        } else if (status >= 500 && status < 600) {
+          throw new HttpException(`Gemini Service Temporary Error: ${msg}`, HttpStatus.BAD_GATEWAY);
+        }
+      }
+      this.logger.error(`Error during re-evaluation: ${err.message}`, err.stack);
+      throw new HttpException(err.message || 'Error communicating with evaluation service', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
     // 2. Save scores per question
     await this.sessionService.saveQuestionScores(session.id, evaluation.questionScores);

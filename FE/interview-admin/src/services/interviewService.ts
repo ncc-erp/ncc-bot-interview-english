@@ -29,6 +29,7 @@ export interface OverallFeedback {
     grammarVocabulary: string;
     confidence: string;
   };
+  hrStar?: number;
 }
 
 export interface QuestionScore {
@@ -127,6 +128,14 @@ export const getInterviewDetail = async (id: string): Promise<InterviewDetail> =
 export const reEvaluateInterview = async (id: string): Promise<InterviewDetail> => {
   return apiFetch(`/admin/sessions/${id}/re-evaluate`, {
     method: "POST",
+  });
+};
+
+export const updateHrStar = async (id: string, rating: number): Promise<OverallFeedback> => {
+  return apiFetch(`/admin/sessions/${id}/hr-rating`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rating }),
   });
 };
 

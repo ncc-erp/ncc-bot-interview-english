@@ -7,7 +7,7 @@ import {
 } from "antd";
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
-import { getInterviewDetail, reEvaluateInterview, type InterviewDetail } from "@/services/interviewService";
+import { getInterviewDetail, reEvaluateInterview, updateHrStar, type InterviewDetail } from "@/services/interviewService";
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -54,6 +54,7 @@ export default function InterviewDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reEvaluating, setReEvaluating] = useState(false);
+  const [updatingHrStar, setUpdatingHrStar] = useState(false);
 
   const handleReEvaluate = async () => {
     if (!id) return;
@@ -66,6 +67,27 @@ export default function InterviewDetailPage() {
       message.error(e.message || "Failed to re-evaluate interview");
     } finally {
       setReEvaluating(false);
+    }
+  };
+
+  const handleHrStarChange = async (rating: number) => {
+    if (!id) return;
+    const currentRating = data?.overallFeedback?.hrStar || 0;
+    if (rating === currentRating || rating === 0) {
+      return;
+    }
+    setUpdatingHrStar(true);
+    try {
+      const updatedFeedback = await updateHrStar(id, rating);
+      setData(prev => prev ? {
+        ...prev,
+        overallFeedback: updatedFeedback
+      } : null);
+      message.success("HR Rating updated successfully!");
+    } catch (e: any) {
+      message.error(e.message || "Failed to update HR rating");
+    } finally {
+      setUpdatingHrStar(false);
     }
   };
 
@@ -189,21 +211,42 @@ export default function InterviewDetailPage() {
               <Text style={{ fontSize: 14, color: "#888" }}>/10</Text>
             </div>
 
-            {data.overallFeedback.star !== undefined && data.overallFeedback.star !== null && (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Text strong>Star Rating: </Text>
-                  <Rate disabled defaultValue={data.overallFeedback.star} />
-                </div>
-                {data.overallFeedback.starReason && (
-                  <div style={{ marginTop: 4 }}>
-                    <Text type="secondary" style={{ fontSize: 13, fontStyle: "italic" }}>
-                      {data.overallFeedback.starReason}
-                    </Text>
+            <div style={{ display: "flex", flexDirection: "row", gap: 16 }}>
+              {data.overallFeedback.star !== undefined && data.overallFeedback.star !== null && (
+                <div style={{ width: "65%" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Text strong>Bot Star Rating: </Text>
+                    <Rate disabled defaultValue={data.overallFeedback.star} />
                   </div>
-                )}
+                  {data.overallFeedback.starReason && (
+                    <div style={{ marginTop: 4 }}>
+                      <Text type="secondary" style={{ fontSize: 13, fontStyle: "italic" }}>
+                        {data.overallFeedback.starReason}
+                      </Text>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Text strong>HR Star Rating: </Text>
+                  <Rate
+                    allowClear={false}
+                    disabled={updatingHrStar}
+                    value={data.overallFeedback.hrStar || 0}
+                    onChange={handleHrStarChange}
+                  />
+                  {updatingHrStar && <Spin size="small" />}
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  <Text type="secondary" style={{ fontSize: 13, fontStyle: "italic" }}>
+                    Recorded HR evaluation rating
+                  </Text>
+                </div>
               </div>
-            )}
+
+            </div>
           </div>
 
           {data.overallFeedback.criteria && (

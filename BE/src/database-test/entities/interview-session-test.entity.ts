@@ -22,6 +22,23 @@ export interface SelectedSection {
   selectedQuestions: string[];
 } 
 
+export interface OverallFeedbackDto {
+  overall?: string;
+  strengths?: string[];
+  improvements?: string[];
+  totalScore?: number;
+  star?: number;
+  starReason?: string;
+  criteria?: {
+    contentDepthAccuracy?: string;
+    fluencySpeakingFlow?: string;
+    pronunciationClarity?: string;
+    grammarVocabulary?: string;
+    confidence?: string;
+  };
+  hrStar?: number;
+} 
+
 @Entity('interview_sessions')
 export class InterviewSession {
   @PrimaryGeneratedColumn({ type: 'bigint' })
@@ -72,21 +89,7 @@ export class InterviewSession {
 
   // Overall feedback
   @Column('jsonb', { nullable: true })
-  overallFeedback: {
-    overall: string;
-    strengths: string[];
-    improvements: string[];
-    totalScore: number;
-    star?: number;
-    starReason?: string;
-    criteria?: {
-      contentDepthAccuracy: string;
-      fluencySpeakingFlow: string;
-      pronunciationClarity: string;
-      grammarVocabulary: string;
-      confidence: string;
-    };
-  };
+  overallFeedback: OverallFeedbackDto;
 
   // Per-question scoring
   @Column('jsonb', { default: [] })

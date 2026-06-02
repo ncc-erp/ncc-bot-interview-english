@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Body,
   Param,
   Query,
   HttpCode,
@@ -11,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, FindManyOptions } from 'typeorm';
-import { InterviewSession } from '@/database-test/entities/interview-session-test.entity';
+import { InterviewSession, OverallFeedbackDto } from '@/database-test/entities/interview-session-test.entity';
 import { SessionMessage } from '@/database-test/entities/session-message.entity';
 import { ScoringService } from '@/interviewer/scoring.service';
 import { InterviewSessionService } from '@/interviewer/interview-session.service';
@@ -244,6 +245,23 @@ export class AdminController {
     }
 
     return updatedSession!;
+  }
+
+  /**
+   * POST /admin/sessions/:id/hr-rating
+   * Updates the HR evaluation star rating for a session
+   */
+  @Post('sessions/:id/hr-rating')
+  @HttpCode(HttpStatus.OK)
+  async updateHrRating(
+    @Param('id') id: string,
+    @Body('rating') rating: number,
+  ): Promise<OverallFeedbackDto> {
+    if (rating === undefined || rating < 1 || rating > 5) {
+      throw new BadRequestException('Rating must be an integer between 1 and 5');
+    }
+
+    return this.sessionService.updateHrStar(id, rating);
   }
 
   /**

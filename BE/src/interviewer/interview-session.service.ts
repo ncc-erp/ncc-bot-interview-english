@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { InterviewSession, SessionStatus, SessionMode, SelectedSection } from '../database-test/entities/interview-session-test.entity';
+import { InterviewSession, SessionStatus, SessionMode, SelectedSection, OverallFeedbackDto } from '../database-test/entities/interview-session-test.entity';
 import { SessionMessage, MessageRole, MessageType } from '../database-test/entities/session-message.entity';
 import { TemplateService } from './template.service';
 import { UserService } from './user.service';
@@ -577,6 +577,30 @@ export class InterviewSessionService {
       (star !== undefined ? `, star to ${star}/5` : '') +
       ` for session ${sessionId}`
     );
+  }
+
+  /**
+   * Update the actual star rating given by HR
+   */
+  async updateHrStar(sessionId: string, hrStar: number): Promise<OverallFeedbackDto> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+      select: ['id', 'overallFeedback'],
+    });
+
+    if (!session) {
+      throw new BadRequestException(`Session ${sessionId} not found`);
+    }
+
+    const updated = {
+      ...(session.overallFeedback || {}),
+      hrStar,
+    };
+
+    await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });
+    this.logger.log(`Updated HR star rating to ${hrStar}/5 for session ${sessionId}`);
+
+    return updated;
   }
 
   /**

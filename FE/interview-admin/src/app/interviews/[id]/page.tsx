@@ -64,7 +64,7 @@ export default function InterviewDetailPage() {
       setData(updated);
       message.success("Interview re-evaluation completed successfully!");
     } catch (e: any) {
-      message.error(e.message || "Failed to re-evaluate interview");
+      message.error((e.message || "Failed to re-evaluate interview") + ". Please try again later.");
     } finally {
       setReEvaluating(false);
     }
@@ -192,8 +192,8 @@ export default function InterviewDetailPage() {
           </div>
           <Divider style={{ marginTop: 8, marginBottom: 16 }} />
 
-          <div style={{ marginBottom: 16, display: "flex", flexDirection: "row" }}>
-            <div style={{ width: "10%" }}>
+          <div style={{ marginBottom: 16, display: "flex", flexFlow: "row wrap", gap: "16px 24px", alignItems: "flex-start" }}>
+            <div style={{ flex: "0 0 auto", minWidth: 140 }}>
               <Text strong>Total Score: </Text>
               <Text
                 strong
@@ -211,10 +211,10 @@ export default function InterviewDetailPage() {
               <Text style={{ fontSize: 14, color: "#888" }}>/10</Text>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "row", gap: 16 }}>
+            <div style={{ display: "flex", flexFlow: "row wrap", gap: "16px 24px", flex: "1 1 300px" }}>
               {data.overallFeedback.star !== undefined && data.overallFeedback.star !== null && (
-                <div style={{ width: "65%" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: "1 1 65%", minWidth: 240 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <Text strong>Bot Star Rating: </Text>
                     <Rate disabled defaultValue={data.overallFeedback.star} />
                   </div>
@@ -228,8 +228,8 @@ export default function InterviewDetailPage() {
                 </div>
               )}
 
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: "1 1 30%", minWidth: 200, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <Text strong>HR Star Rating: </Text>
                   <Rate
                     allowClear={false}
@@ -245,7 +245,6 @@ export default function InterviewDetailPage() {
                   </Text>
                 </div>
               </div>
-
             </div>
           </div>
 

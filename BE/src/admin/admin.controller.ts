@@ -36,9 +36,9 @@ export interface SessionListItemDto {
   completedAt: Date | null;
   durationSeconds: number | null;
   roomName: string | null;
-  user: { id: string; username: string; mezonUserId: string} | null;
+  user: { id: string; username: string; mezonUserId: string } | null;
   template: { id: string; name: string; type: string; level: string; numberOfQuestions: number } | null;
-  overallFeedback: { totalScore: number } | null;
+  overallFeedback: { totalScore: number; star?: number } | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -60,7 +60,7 @@ export class AdminController {
     private readonly messageRepo: Repository<SessionMessage>,
     private readonly scoringService: ScoringService,
     private readonly sessionService: InterviewSessionService,
-  ) {}
+  ) { }
 
   /**
    * GET /admin/sessions
@@ -121,23 +121,23 @@ export class AdminController {
       roomName: s.roomName ?? null,
       user: s.user
         ? {
-            id: s.user.id,
-            username: s.user.username,
-            mezonUserId: s.user.mezonUserId,
-            avatarUrl: s.user.avatarUrl,
-          }
+          id: s.user.id,
+          username: s.user.username,
+          mezonUserId: s.user.mezonUserId,
+          avatarUrl: s.user.avatarUrl,
+        }
         : null,
       template: s.template
         ? {
-            id: s.template.id,
-            name: s.template.name,
-            type: s.template.type,
-            level: s.template.level,
-            numberOfQuestions: s.template.numberOfQuestions,
-          }
+          id: s.template.id,
+          name: s.template.name,
+          type: s.template.type,
+          level: s.template.level,
+          numberOfQuestions: s.template.numberOfQuestions,
+        }
         : null,
-      overallFeedback: s.overallFeedback
-        ? { totalScore: s.overallFeedback.totalScore }
+       overallFeedback: s.overallFeedback
+        ? { totalScore: s.overallFeedback.totalScore, star: s.overallFeedback.star }
         : null,
     }));
 
@@ -216,12 +216,12 @@ export class AdminController {
     } catch (err: any) {
       if (err.response) {
         const status = err.response.status;
-        const msg = err.response.data?.error?.message || err.message || 'Gemini API Error';
-        this.logger.error(`Gemini API error during re-evaluation: ${status} - ${msg}`);
+        const msg = err.response.data?.error?.message || err.message || 'AI API Error';
+        this.logger.error(`AI error during re-evaluation: ${status} - ${msg}`);
         if (status === 429) {
-          throw new HttpException(`Gemini Rate Limit Exceeded: ${msg}`, HttpStatus.TOO_MANY_REQUESTS);
+          throw new HttpException(`AI Rate Limit Exceeded: ${msg}`, HttpStatus.TOO_MANY_REQUESTS);
         } else if (status >= 500 && status < 600) {
-          throw new HttpException(`Gemini Service Temporary Error: ${msg}`, HttpStatus.BAD_GATEWAY);
+          throw new HttpException(`AI Service Temporary Error: ${msg}`, HttpStatus.BAD_GATEWAY);
         }
       }
       this.logger.error(`Error during re-evaluation: ${err.message}`, err.stack);
@@ -253,7 +253,7 @@ export class AdminController {
       where: { id },
       relations: ['template', 'user'],
     });
-    
+
     // Load messages separately
     const messages = await this.messageRepo.find({
       where: { sessionId: id },
@@ -277,8 +277,8 @@ export class AdminController {
     @Param('id') id: string,
     @Body('rating') rating: number,
   ): Promise<OverallFeedbackDto> {
-    if (rating === undefined || rating < 1 || rating > 5) {
-      throw new BadRequestException('Rating must be an integer between 1 and 5');
+    if (rating === undefined || rating < 1 || rating > 5 || (rating * 2) % 1 !== 0) {
+      throw new BadRequestException('Rating must be a number between 1 and 5 in steps of 0.5');
     }
 
     return this.sessionService.updateHrStar(id, rating);
@@ -297,7 +297,7 @@ export class AdminController {
       this.sessionRepo.count({ where: { status: 'in_progress' as any } }),
       this.sessionRepo.count({ where: { status: 'cancelled' as any } }),
     ]);
- 
+
     return { total, completed, inProgress, cancelled };
   }
 }

@@ -182,10 +182,10 @@ export default function InterviewDetailModal({ open, data, loading, onClose }: P
               <div style={{ marginBottom: 12 }}>
                 <div style={{ marginBottom: 6 }}>
                   <Text strong>Total Score: </Text>
-                  <Text strong style={{ fontSize: 22, color: data.overallFeedback.totalScore >= 8 ? "#52c41a" : data.overallFeedback.totalScore >= 6 ? "#faad14" : "#ff4d4f" }}>
-                    {data.overallFeedback.totalScore}
+                  <Text strong style={{ fontSize: 22, color: (data.overallFeedback.star ?? 0) >= 4 ? "#52c41a" : (data.overallFeedback.star ?? 0) >= 3 ? "#faad14" : "#ff4d4f" }}>
+                    {data.overallFeedback.star ?? "Pending"}
                   </Text>
-                  <Text style={{ fontSize: 14, color: "#888" }}>/10</Text>
+                  <Text style={{ fontSize: 14, color: "#888" }}>/5</Text>
                 </div>
               </div>
               {data.overallFeedback.overall && (

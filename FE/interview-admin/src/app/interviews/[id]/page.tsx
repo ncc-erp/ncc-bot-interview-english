@@ -199,16 +199,19 @@ export default function InterviewDetailPage() {
                 strong
                 style={{
                   fontSize: 22,
-                  color: data.overallFeedback.totalScore >= 8
+                  color: (data.overallFeedback.star ?? data.overallFeedback.hrStar ?? 0) >= 4
                     ? "#52c41a"
-                    : data.overallFeedback.totalScore >= 6
+                    : (data.overallFeedback.star ?? data.overallFeedback.hrStar ?? 0) >= 3
                       ? "#faad14"
                       : "#ff4d4f",
                 }}
               >
-                {data.overallFeedback.totalScore}
+                {data.overallFeedback.star ?? data.overallFeedback.hrStar ?? "Pending"}
               </Text>
-              <Text style={{ fontSize: 14, color: "#888" }}>/10</Text>
+              {data.overallFeedback.star !== undefined && data.overallFeedback.star !== null
+                || data.overallFeedback.hrStar !== undefined && data.overallFeedback.hrStar !== null && (
+                  <Text style={{ fontSize: 14, color: "#888" }}>/5</Text>
+                )}
             </div>
 
             <div style={{ display: "flex", flexFlow: "row wrap", gap: "16px 24px", flex: "1 1 300px" }}>
@@ -216,7 +219,7 @@ export default function InterviewDetailPage() {
                 <div style={{ flex: "1 1 65%", minWidth: 240 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <Text strong>Bot Star Rating: </Text>
-                    <Rate disabled defaultValue={data.overallFeedback.star} />
+                    <Rate disabled allowHalf value={data.overallFeedback.star} />
                   </div>
                   {data.overallFeedback.starReason && (
                     <div style={{ marginTop: 4 }}>
@@ -233,6 +236,7 @@ export default function InterviewDetailPage() {
                   <Text strong>HR Star Rating: </Text>
                   <Rate
                     allowClear={false}
+                    allowHalf
                     disabled={updatingHrStar}
                     value={data.overallFeedback.hrStar || 0}
                     onChange={handleHrStarChange}

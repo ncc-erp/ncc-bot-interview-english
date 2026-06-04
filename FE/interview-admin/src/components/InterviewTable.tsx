@@ -5,10 +5,10 @@ import type { InterviewListItem } from "@/services/interviewService";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   finished_session: { label: "Finished Session", color: "green" },
-  completed:   { label: "Completed",   color: "green" },
+  completed: { label: "Completed", color: "green" },
   in_progress: { label: "In Progress", color: "orange" },
-  pending:     { label: "Pending",     color: "blue" },
-  cancelled:   { label: "Cancelled",   color: "red" },
+  pending: { label: "Pending", color: "blue" },
+  cancelled: { label: "Cancelled", color: "red" },
 };
 
 function fmtDuration(seconds: number | null): string {
@@ -78,12 +78,12 @@ export default function InterviewTable({ data, loading, onView, pagination }: Pr
       title: "Total Score",
       dataIndex: "overallFeedback",
       render: (_: any, record: InterviewListItem) => {
-        const score = record.overallFeedback?.totalScore;
+        const score = record.overallFeedback?.star ?? record.overallFeedback?.hrStar ?? "--";
         if (score == null) return <span style={{ color: "#bbb" }}>--</span>;
-        const color = score >= 8 ? "#52c41a" : score >= 6 ? "#faad14" : "#ff4d4f";
+        const color = score >= 4 ? "#52c41a" : score >= 3 ? "#faad14" : "#ff4d4f";
         return (
           <span style={{ fontWeight: 700, fontSize: 15, color }}>
-            {score}<span style={{ fontWeight: 400, fontSize: 12, color: "#888" }}>/10</span>
+            {score}<span style={{ fontWeight: 400, fontSize: 12, color: "#888" }}>/5</span>
           </span>
         );
       },

@@ -208,8 +208,8 @@ export default function InterviewDetailPage() {
               >
                 {data.overallFeedback.star ?? data.overallFeedback.hrStar ?? "Pending"}
               </Text>
-              {data.overallFeedback.star !== undefined && data.overallFeedback.star !== null
-                || data.overallFeedback.hrStar !== undefined && data.overallFeedback.hrStar !== null && (
+              {((data.overallFeedback.star !== undefined && data.overallFeedback.star !== null)
+                || (data.overallFeedback.hrStar !== undefined && data.overallFeedback.hrStar !== null)) && (
                   <Text style={{ fontSize: 14, color: "#888" }}>/5</Text>
                 )}
             </div>

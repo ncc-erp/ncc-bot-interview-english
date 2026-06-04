@@ -57,20 +57,21 @@ export class AudioMergeCronService {
 			// Build tracks from file_results using started_at_ns as timestamp key
       const tracksRecord: Record<string, string> = {};
       for (const f of fileResults) {
-        if (f.started_at_ns && f.started_at_ns !== 'null' && f.started_at_ns !== 'undefined') {
+        if (this.isValidTrack(f)) {
           tracksRecord[f.started_at_ns] = f.filename;
         } else {
-          this.logger.warn(`[AudioMergeCronService] Skipping track with invalid started_at_ns in room ${session.roomName}: ${JSON.stringify(f)}`);
+          this.logger.warn(`[AudioMergeCronService] Invalid audio track metadata detected in room ${session.roomName}: ${JSON.stringify(f)}`);
         }
       }
 
-			// Save individual track URLs to DB
-      const tracksWithOffset = parseTracksWithOffset(tracksRecord, minioEndpoint, minioBucket);
-      if (tracksWithOffset.length === 0) {
+      if (Object.keys(tracksRecord).length === 0) {
         this.logger.warn(`[AudioMergeCronService] No valid audio tracks found for session ${session.id}. Marking audio merge as skipped.`);
         await this.sessionService.addMergedAudioUrl(session.id, "_Failed_");
         return;
       }
+
+      // Save individual track URLs to DB
+      const tracksWithOffset = parseTracksWithOffset(tracksRecord, minioEndpoint, minioBucket);
       const individualUrls = tracksWithOffset.map(t => t.url);
       await this.sessionService.addAudioUrls(session.id, individualUrls);
       this.logger.log(`✅ Saved ${individualUrls.length} track URL(s) to session ${session.id}`);
@@ -119,8 +120,31 @@ export class AudioMergeCronService {
       } else {
         this.logger.warn(`[Scoring] No questions found for session ${session.id}, skipping`);
       }
-		} catch (error) {
-			this.logger.error(`[AudioMergeCronService] Failed to process audio:`, error);
-		}
-	}
+    } catch (error) {
+      this.logger.error(`[AudioMergeCronService] Failed to process audio:`, error);
+    }
+  }
+
+  private isValidTrack(f: any): boolean {
+    if (!f) return false;
+
+    // Check started_at_ns
+    const hasStarted = f.started_at_ns &&
+      f.started_at_ns !== 'null' &&
+      f.started_at_ns !== 'undefined' &&
+      /^\d+$/.test(String(f.started_at_ns));
+
+    // Check ended_at_ns
+    const hasEnded = f.ended_at_ns &&
+      f.ended_at_ns !== 'null' &&
+      f.ended_at_ns !== 'undefined' &&
+      /^\d+$/.test(String(f.ended_at_ns));
+
+    // Check filename
+    const hasFilename = f.filename &&
+      typeof f.filename === 'string' &&
+      f.filename.trim() !== '';
+
+    return !!(hasStarted && hasEnded && hasFilename);
+  }
 }

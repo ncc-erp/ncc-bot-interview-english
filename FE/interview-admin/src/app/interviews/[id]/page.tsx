@@ -168,7 +168,7 @@ export default function InterviewDetailPage() {
         <Card style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontWeight: 600, fontSize: 16 }}>Results</span>
-            {data.audioFile && (
+            {data.audioFile && data.audioFile !== "_Failed_" && (
               <Popconfirm
                 title="Re-evaluate Session"
                 description="Are you sure you want to re-evaluate this session? This will call AI and overwrite the existing scores."
@@ -231,24 +231,26 @@ export default function InterviewDetailPage() {
                 </div>
               )}
 
-              <div style={{ flex: "1 1 30%", minWidth: 200, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <Text strong>HR Star Rating: </Text>
-                  <Rate
-                    allowClear={false}
-                    allowHalf
-                    disabled={updatingHrStar}
-                    value={data.overallFeedback.hrStar || 0}
-                    onChange={handleHrStarChange}
-                  />
-                  {updatingHrStar && <Spin size="small" />}
+              {data.audioFile !== "_Failed_" && (
+                <div style={{ flex: "1 1 30%", minWidth: 200, marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <Text strong>HR Star Rating: </Text>
+                    <Rate
+                      allowClear={false}
+                      allowHalf
+                      disabled={updatingHrStar}
+                      value={data.overallFeedback.hrStar || 0}
+                      onChange={handleHrStarChange}
+                    />
+                    {updatingHrStar && <Spin size="small" />}
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    <Text type="secondary" style={{ fontSize: 13, fontStyle: "italic" }}>
+                      Recorded HR evaluation rating
+                    </Text>
+                  </div>
                 </div>
-                <div style={{ marginTop: 4 }}>
-                  <Text type="secondary" style={{ fontSize: 13, fontStyle: "italic" }}>
-                    Recorded HR evaluation rating
-                  </Text>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -303,7 +305,7 @@ export default function InterviewDetailPage() {
       )}
 
       {/* Audio */}
-      {data.audioFile && (
+      {data.audioFile && data.audioFile !== "_Failed_" && (
         <Card style={{ marginBottom: 16 }}>
           <Divider plain style={{ marginTop: 0 }}>🎧 Recording</Divider>
           <audio controls src={data.audioFile} style={{ width: "100%" }} />

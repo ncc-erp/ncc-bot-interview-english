@@ -57,14 +57,23 @@ export class AudioMergeCronService {
 			// Build tracks from file_results using started_at_ns as timestamp key
       const tracksRecord: Record<string, string> = {};
       for (const f of fileResults) {
-        tracksRecord[f.started_at_ns] = f.filename;
+        if (f.started_at_ns && f.started_at_ns !== 'null' && f.started_at_ns !== 'undefined') {
+          tracksRecord[f.started_at_ns] = f.filename;
+        } else {
+          this.logger.warn(`[AudioMergeCronService] Skipping track with invalid started_at_ns in room ${session.roomName}: ${JSON.stringify(f)}`);
+        }
       }
 
 			// Save individual track URLs to DB
       const tracksWithOffset = parseTracksWithOffset(tracksRecord, minioEndpoint, minioBucket);
-			const individualUrls = tracksWithOffset.map(t => t.url);
-			await this.sessionService.addAudioUrls(session.id, individualUrls);
-			this.logger.log(`✅ Saved ${individualUrls.length} track URL(s) to session ${session.id}`);
+      if (tracksWithOffset.length === 0) {
+        this.logger.warn(`[AudioMergeCronService] No valid audio tracks found for session ${session.id}. Marking audio merge as skipped.`);
+        await this.sessionService.addMergedAudioUrl(session.id, "_Failed_");
+        return;
+      }
+      const individualUrls = tracksWithOffset.map(t => t.url);
+      await this.sessionService.addAudioUrls(session.id, individualUrls);
+      this.logger.log(`✅ Saved ${individualUrls.length} track URL(s) to session ${session.id}`);
 
 			// Merge tracks
       this.logger.log(`🎵 Merging ${tracksWithOffset.length} tracks...`);

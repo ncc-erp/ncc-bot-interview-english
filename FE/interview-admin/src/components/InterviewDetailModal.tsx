@@ -215,7 +215,7 @@ export default function InterviewDetailModal({ open, data, loading, onClose }: P
           )}
 
           {/* Audio */}
-          {data.audioFile && (
+          {data.audioFile && data.audioFile !== "_Failed_" && (
             <>
               <Divider plain style={{ marginTop: 16, marginBottom: 12 }}>
                 🎧 Recording

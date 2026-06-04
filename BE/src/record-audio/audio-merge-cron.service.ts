@@ -56,16 +56,17 @@ export class AudioMergeCronService {
 
 			// Build tracks from file_results using started_at_ns as timestamp key
       const tracksRecord: Record<string, string> = {};
+      let isValidTrack = true;
       for (const f of fileResults) {
         if (this.isValidTrack(f)) {
           tracksRecord[f.started_at_ns] = f.filename;
         } else {
           this.logger.warn(`[AudioMergeCronService] Invalid audio track metadata detected in room ${session.roomName}: ${JSON.stringify(f)}`);
+          isValidTrack = false;
         }
       }
 
-      if (Object.keys(tracksRecord).length === 0) {
-        this.logger.warn(`[AudioMergeCronService] No valid audio tracks found for session ${session.id}. Marking audio merge as skipped.`);
+      if (!isValidTrack) {
         await this.sessionService.addMergedAudioUrl(session.id, "_Failed_");
         return;
       }
@@ -128,23 +129,16 @@ export class AudioMergeCronService {
   private isValidTrack(f: any): boolean {
     if (!f) return false;
 
-    // Check started_at_ns
-    const hasStarted = f.started_at_ns &&
-      f.started_at_ns !== 'null' &&
-      f.started_at_ns !== 'undefined' &&
-      /^\d+$/.test(String(f.started_at_ns));
+    const isValidTimestamp = (value: unknown): boolean =>
+      value !== null &&
+      value !== undefined &&
+      /^\d+$/.test(String(value));
 
-    // Check ended_at_ns
-    const hasEnded = f.ended_at_ns &&
-      f.ended_at_ns !== 'null' &&
-      f.ended_at_ns !== 'undefined' &&
-      /^\d+$/.test(String(f.ended_at_ns));
-
-    // Check filename
-    const hasFilename = f.filename &&
+    return (
+      isValidTimestamp(f.started_at_ns) &&
+      isValidTimestamp(f.ended_at_ns) &&
       typeof f.filename === 'string' &&
-      f.filename.trim() !== '';
-
-    return !!(hasStarted && hasEnded && hasFilename);
+      f.filename.trim().length > 0
+    );
   }
 }

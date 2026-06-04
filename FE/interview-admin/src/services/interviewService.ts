@@ -68,7 +68,7 @@ export interface InterviewListItem {
   roomName: string | null;
   user: SessionUser | null;
   template: SessionTemplate | null;
-  overallFeedback: { totalScore: number; star?: number } | null;
+  overallFeedback: { totalScore: number; star?: number; hrStar?: number } | null;
 }
 
 // Dùng cho chi tiết (đầy đủ)

@@ -199,16 +199,18 @@ export default function InterviewDetailPage() {
                 strong
                 style={{
                   fontSize: 22,
-                  color: (data.overallFeedback.star ?? 0) >= 4
+                  color: (data.overallFeedback.star ?? data.overallFeedback.hrStar ?? 0) >= 4
                     ? "#52c41a"
-                    : (data.overallFeedback.star ?? 0) >= 3
+                    : (data.overallFeedback.star ?? data.overallFeedback.hrStar ?? 0) >= 3
                       ? "#faad14"
                       : "#ff4d4f",
                 }}
               >
-                {data.overallFeedback.star ?? "Pending"}
+                {data.overallFeedback.star ?? data.overallFeedback.hrStar ?? "Pending"}
               </Text>
-              <Text style={{ fontSize: 14, color: "#888" }}>/5</Text>
+              {data.overallFeedback.star !== undefined && data.overallFeedback.star !== null && (
+                <Text style={{ fontSize: 14, color: "#888" }}>/5</Text>
+              )}
             </div>
 
             <div style={{ display: "flex", flexFlow: "row wrap", gap: "16px 24px", flex: "1 1 300px" }}>

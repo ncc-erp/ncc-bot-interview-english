@@ -38,7 +38,7 @@ export interface SessionListItemDto {
   roomName: string | null;
   user: { id: string; username: string; mezonUserId: string } | null;
   template: { id: string; name: string; type: string; level: string; numberOfQuestions: number } | null;
-  overallFeedback: { totalScore: number; star?: number } | null;
+  overallFeedback: { totalScore: number; star?: number; hrStar?: number } | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -136,8 +136,8 @@ export class AdminController {
           numberOfQuestions: s.template.numberOfQuestions,
         }
         : null,
-       overallFeedback: s.overallFeedback
-        ? { totalScore: s.overallFeedback.totalScore, star: s.overallFeedback.star }
+      overallFeedback: s.overallFeedback
+        ? { totalScore: s.overallFeedback.totalScore, star: s.overallFeedback.star, hrStar: s.overallFeedback.hrStar }
         : null,
     }));
 

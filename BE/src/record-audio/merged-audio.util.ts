@@ -80,13 +80,22 @@ export function parseTracksWithOffset(
   minioEndpoint: string,
   minioBucket: string,
 ): TrackInput[] {
-  const entries = Object.entries(tracks).map(([timestampNs, filename]) => {
-    const cleanFilename = filename.startsWith('/') ? filename.slice(1) : filename;
-    const url = `${minioEndpoint}/${minioBucket}/${cleanFilename}`;
-    // nanoseconds → milliseconds
-    const timestampMs = Number(BigInt(timestampNs) / BigInt(1_000_000));
-    return { url, timestampMs };
-  });
+  const entries = Object.entries(tracks)
+    .filter(([timestampNs]) => {
+      return timestampNs && timestampNs !== 'null' && timestampNs !== 'undefined' && /^\d+$/.test(timestampNs);
+    })
+    .map(([timestampNs, filename]) => {
+      const safeFilename = filename || '';
+      const cleanFilename = safeFilename.startsWith('/') ? safeFilename.slice(1) : safeFilename;
+      const url = `${minioEndpoint}/${minioBucket}/${cleanFilename}`;
+      // nanoseconds → milliseconds
+      const timestampMs = Number(BigInt(timestampNs) / BigInt(1_000_000));
+      return { url, timestampMs };
+    });
+
+  if (entries.length === 0) {
+    return [];
+  }
 
   // Sort by timestamp ascending
   entries.sort((a, b) => a.timestampMs - b.timestampMs);

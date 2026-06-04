@@ -56,15 +56,26 @@ export class AudioMergeCronService {
 
 			// Build tracks from file_results using started_at_ns as timestamp key
       const tracksRecord: Record<string, string> = {};
+      let isValidTrack = true;
       for (const f of fileResults) {
-        tracksRecord[f.started_at_ns] = f.filename;
+        if (this.isValidTrack(f)) {
+          tracksRecord[f.started_at_ns] = f.filename;
+        } else {
+          this.logger.warn(`[AudioMergeCronService] Invalid audio track metadata detected in room ${session.roomName}: ${JSON.stringify(f)}`);
+          isValidTrack = false;
+        }
       }
 
-			// Save individual track URLs to DB
+      if (!isValidTrack) {
+        await this.sessionService.addMergedAudioUrl(session.id, "_Failed_");
+        return;
+      }
+
+      // Save individual track URLs to DB
       const tracksWithOffset = parseTracksWithOffset(tracksRecord, minioEndpoint, minioBucket);
-			const individualUrls = tracksWithOffset.map(t => t.url);
-			await this.sessionService.addAudioUrls(session.id, individualUrls);
-			this.logger.log(`✅ Saved ${individualUrls.length} track URL(s) to session ${session.id}`);
+      const individualUrls = tracksWithOffset.map(t => t.url);
+      await this.sessionService.addAudioUrls(session.id, individualUrls);
+      this.logger.log(`✅ Saved ${individualUrls.length} track URL(s) to session ${session.id}`);
 
 			// Merge tracks
       this.logger.log(`🎵 Merging ${tracksWithOffset.length} tracks...`);
@@ -110,8 +121,24 @@ export class AudioMergeCronService {
       } else {
         this.logger.warn(`[Scoring] No questions found for session ${session.id}, skipping`);
       }
-		} catch (error) {
-			this.logger.error(`[AudioMergeCronService] Failed to process audio:`, error);
-		}
-	}
+    } catch (error) {
+      this.logger.error(`[AudioMergeCronService] Failed to process audio:`, error);
+    }
+  }
+
+  private isValidTrack(f: any): boolean {
+    if (!f) return false;
+
+    const isValidTimestamp = (value: unknown): boolean =>
+      value !== null &&
+      value !== undefined &&
+      /^\d+$/.test(String(value));
+
+    return (
+      isValidTimestamp(f.started_at_ns) &&
+      isValidTimestamp(f.ended_at_ns) &&
+      typeof f.filename === 'string' &&
+      f.filename.trim().length > 0
+    );
+  }
 }

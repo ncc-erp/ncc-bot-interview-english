@@ -78,7 +78,7 @@ export default function InterviewTable({ data, loading, onView, pagination }: Pr
       title: "Total Score",
       dataIndex: "overallFeedback",
       render: (_: any, record: InterviewListItem) => {
-        const score = record.overallFeedback?.star ?? record.overallFeedback?.hrStar ?? "--";
+        const score = record.overallFeedback?.star ?? record.overallFeedback?.hrStar;
         if (score == null) return <span style={{ color: "#bbb" }}>--</span>;
         const color = score >= 4 ? "#52c41a" : score >= 3 ? "#faad14" : "#ff4d4f";
         return (

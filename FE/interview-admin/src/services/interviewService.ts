@@ -142,3 +142,19 @@ export const updateHrStar = async (id: string, rating: number): Promise<OverallF
 export const getStats = async (): Promise<AdminStats> => {
   return apiFetch("/admin/stats");
 };
+
+export const getCandidateResult = async (token: string): Promise<InterviewDetail> => {
+  return apiFetch(`/candidate/sessions/${token}`);
+};
+
+export const getSystemSettings = async (): Promise<Record<string, any>> => {
+  return apiFetch("/admin/settings");
+};
+
+export const updateSystemSettings = async (settings: Record<string, any>): Promise<any> => {
+  return apiFetch("/admin/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+};

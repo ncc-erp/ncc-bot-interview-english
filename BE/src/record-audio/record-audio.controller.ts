@@ -109,6 +109,7 @@ export class InterviewAudioController {
         session.channelId,
         session.template.name,
         urlsToSend,
+        session.candidateToken,
       );
       this.logger.log(`📤 Sent audio link(s) to channel ${session.channelId}`);
 

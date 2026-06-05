@@ -22,6 +22,8 @@ import { ScoringService } from "./scoring.service";
 import { AudioMergeCronService } from "@/record-audio/audio-merge-cron.service";
 import { MinioService } from "@/record-audio/minio.service";
 
+import { SystemSetting } from "@/database-test/entities/system-setting.entity";
+
 // const checkpointer = new MemorySaver();
 
 @Module({
@@ -30,7 +32,8 @@ import { MinioService } from "@/record-audio/minio.service";
       CustomPrompt,
       InterviewTemplate,
       InterviewSession,
-      SessionMessage,]),
+      SessionMessage,
+      SystemSetting,]),
   ],
   controllers: [],
   providers: [

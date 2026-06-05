@@ -2,16 +2,18 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminController } from './admin.controller';
 import { AdminTemplateController } from './admin-template.controller';
+import { CandidateController } from './candidate.controller';
 import { InterviewSession } from '@/database-test/entities/interview-session-test.entity';
 import { SessionMessage } from '@/database-test/entities/session-message.entity';
 import { InterviewTemplate } from '@/database-test/entities/interview-template.entity';
+import { SystemSetting } from '@/database-test/entities/system-setting.entity';
 import { InterviewerModule } from '@/interviewer/interviewer.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InterviewSession, SessionMessage, InterviewTemplate]),
+    TypeOrmModule.forFeature([InterviewSession, SessionMessage, InterviewTemplate, SystemSetting]),
     InterviewerModule,
   ],
-  controllers: [AdminController, AdminTemplateController],
+  controllers: [AdminController, AdminTemplateController, CandidateController],
 })
 export class AdminModule {}

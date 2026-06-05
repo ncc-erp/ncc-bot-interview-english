@@ -16,6 +16,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, FindManyOptions } from 'typeorm';
 import { InterviewSession, OverallFeedbackDto } from '@/database-test/entities/interview-session-test.entity';
 import { SessionMessage } from '@/database-test/entities/session-message.entity';
+import { SystemSetting } from '@/database-test/entities/system-setting.entity';
 import { ScoringService } from '@/interviewer/scoring.service';
 import { InterviewSessionService } from '@/interviewer/interview-session.service';
 
@@ -58,6 +59,8 @@ export class AdminController {
     private readonly sessionRepo: Repository<InterviewSession>,
     @InjectRepository(SessionMessage)
     private readonly messageRepo: Repository<SessionMessage>,
+    @InjectRepository(SystemSetting)
+    private readonly settingRepo: Repository<SystemSetting>,
     private readonly scoringService: ScoringService,
     private readonly sessionService: InterviewSessionService,
   ) { }
@@ -299,5 +302,29 @@ export class AdminController {
     ]);
 
     return { total, completed, inProgress, cancelled };
+  }
+
+  @Get('settings')
+  @HttpCode(HttpStatus.OK)
+  async getSettings() {
+    const settings = await this.settingRepo.find();
+    return settings.reduce((acc, curr) => {
+      acc[curr.key] = curr.value === 'true' ? true : curr.value === 'false' ? false : curr.value;
+      return acc;
+    }, {});
+  }
+
+  @Post('settings')
+  @HttpCode(HttpStatus.OK)
+  async updateSettings(@Body() body: Record<string, any>) {
+    for (const [key, value] of Object.entries(body)) {
+      let setting = await this.settingRepo.findOne({ where: { key } });
+      if (!setting) {
+        setting = this.settingRepo.create({ key });
+      }
+      setting.value = String(value);
+      await this.settingRepo.save(setting);
+    }
+    return { success: true };
   }
 }

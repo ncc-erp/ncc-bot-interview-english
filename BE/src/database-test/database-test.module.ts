@@ -1,5 +1,6 @@
 import { Module, OnModuleInit } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmModule, InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InterviewTemplate } from '../database-test/entities/interview-template.entity';
 import { InterviewSession } from '../database-test/entities/interview-session-test.entity';
@@ -8,6 +9,7 @@ import { UserService } from '@/interviewer/user.service';
 import { User } from './entities/user-test.entity';
 import { CustomPrompt } from './entities/custom-prompt.entity';
 import { SessionMessage } from './entities/session-message.entity';
+import { SystemSetting } from './entities/system-setting.entity';
 
 @Module({
   imports: [
@@ -25,20 +27,35 @@ import { SessionMessage } from './entities/session-message.entity';
           CustomPrompt,
           InterviewTemplate,
           InterviewSession,
-          SessionMessage,],
+          SessionMessage,
+          SystemSetting,],
         synchronize: configService.get<string>('NODE_ENV') === 'development',
         logging: false,
       }),
     }),
-    TypeOrmModule.forFeature([User, CustomPrompt, InterviewTemplate, InterviewSession, SessionMessage]),
+    TypeOrmModule.forFeature([User, CustomPrompt, InterviewTemplate, InterviewSession, SessionMessage, SystemSetting]),
   ],
   providers: [TemplateService, UserService],
   exports: [TemplateService, TypeOrmModule, UserService],
 })
 export class DatabaseTestModule implements OnModuleInit {
-  constructor(private readonly templateService: TemplateService) {}
+  constructor(
+    private readonly templateService: TemplateService,
+    @InjectRepository(SystemSetting)
+    private readonly settingRepo: Repository<SystemSetting>,
+  ) {}
 
   async onModuleInit() {
     await this.templateService.seedDefaultTemplates();
+    
+    // Seed default settings
+    const existing = await this.settingRepo.findOne({ where: { key: 'send_result_link_to_candidate' } });
+    if (!existing) {
+      await this.settingRepo.save({
+        key: 'send_result_link_to_candidate',
+        value: 'true',
+      });
+      console.log('🌱 Seeded default system setting send_result_link_to_candidate = true');
+    }
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Input, Statistic, Row, Col, Select, DatePicker, Space, Alert, Button } from "antd";
+import { Card, Input, Statistic, Row, Col, Select, DatePicker, Space, Alert, Button, Switch, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import dayjs, { Dayjs } from "dayjs";
@@ -9,6 +9,8 @@ import InterviewTable from "@/components/InterviewTable";
 import {
   getInterviews,
   getStats,
+  getSystemSettings,
+  updateSystemSettings,
   type InterviewListItem,
   type AdminStats,
   type GetInterviewsParams,
@@ -28,6 +30,10 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function InterviewListPage() {
   const router = useRouter();
+
+  // ── Config state ────────────────────────────────────────────────────────────
+  const [sendLinkEnabled, setSendLinkEnabled] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(false);
 
   // ── List state ──────────────────────────────────────────────────────────────
   const [interviews, setInterviews] = useState<InterviewListItem[]>([]);
@@ -73,6 +79,30 @@ export default function InterviewListPage() {
   useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, dateRange]);
   useEffect(() => { fetchList(); }, [fetchList]);
 
+  // ── Fetch settings ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    getSystemSettings()
+      .then((settings) => {
+        if (settings && settings.send_result_link_to_candidate !== undefined) {
+          setSendLinkEnabled(settings.send_result_link_to_candidate);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleToggleSendLink = async (checked: boolean) => {
+    setSettingsLoading(true);
+    try {
+      await updateSystemSettings({ send_result_link_to_candidate: checked });
+      setSendLinkEnabled(checked);
+      message.success(`Auto-sending results link is now ${checked ? "enabled" : "disabled"}`);
+    } catch (e: any) {
+      message.error(e.message || "Failed to update configuration");
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
   // ── Fetch stats ──────────────────────────────────────────────────────────────
   useEffect(() => {
     getStats()
@@ -87,9 +117,25 @@ export default function InterviewListPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 26, marginBottom: 10 }}>Interview List</h1>
-      <div style={{ color: "#888", marginBottom: 20 }}>
-        Manage and track AI interview results
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 26, margin: 0 }}>Interview List</h1>
+          <div style={{ color: "#888", marginTop: 4 }}>
+            Manage and track AI interview results
+          </div>
+        </div>
+        <Card size="small" style={{ minWidth: 260, border: "1px solid #1677ff", background: "#f0f8ff" }}>
+          <Space align="center" style={{ width: "100%", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Auto-send Results Link:</span>
+            <Switch
+              checked={sendLinkEnabled}
+              loading={settingsLoading}
+              onChange={handleToggleSendLink}
+              checkedChildren="ON"
+              unCheckedChildren="OFF"
+            />
+          </Space>
+        </Card>
       </div>
 
       {/* Stats */}

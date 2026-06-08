@@ -288,11 +288,11 @@ export default function CandidateResultPage() {
                         {qs.criteria && (
                           <div style={{ marginBottom: 8 }}>
                             <Space wrap size={[4, 8]}>
-                              <Tag color="blue">Relevance: {qs.criteria.relevance}/10</Tag>
-                              <Tag color="cyan">Content Depth: {qs.criteria.contentDepth}/10</Tag>
-                              <Tag color="purple">Fluency: {qs.criteria.fluency}/10</Tag>
-                              <Tag color="geekblue">Grammar/Vocab: {qs.criteria.grammarVocabulary}/10</Tag>
-                              <Tag color="magenta">Structure: {qs.criteria.structure}/10</Tag>
+                              <Tag color="blue">Relevance: {qs.criteria.relevance}/3</Tag>
+                              <Tag color="cyan">Content Depth: {qs.criteria.contentDepth}/2.5</Tag>
+                              <Tag color="purple">Fluency: {qs.criteria.fluency}/2</Tag>
+                              <Tag color="geekblue">Grammar/Vocab: {qs.criteria.grammarVocabulary}/1.5</Tag>
+                              <Tag color="magenta">Structure: {qs.criteria.structure}/1</Tag>
                             </Space>
                           </div>
                         )}

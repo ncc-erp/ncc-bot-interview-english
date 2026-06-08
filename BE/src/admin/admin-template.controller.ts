@@ -10,6 +10,7 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -19,6 +20,7 @@ import {
   InterviewType,
   QuestionSection,
 } from '@/database-test/entities/interview-template.entity';
+import { AdminAuthGuard } from './admin-auth.guard';
 
 export class CreateTemplateDto {
   name: string;
@@ -45,6 +47,7 @@ export class UpdateTemplateDto {
 }
 
 @Controller('admin/templates')
+@UseGuards(AdminAuthGuard)
 export class AdminTemplateController {
   constructor(
     @InjectRepository(InterviewTemplate)

@@ -11,6 +11,7 @@ import {
   BadRequestException,
   HttpException,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, FindManyOptions } from 'typeorm';
@@ -19,6 +20,7 @@ import { SessionMessage } from '@/database-test/entities/session-message.entity'
 import { SystemSetting } from '@/database-test/entities/system-setting.entity';
 import { ScoringService } from '@/interviewer/scoring.service';
 import { InterviewSessionService } from '@/interviewer/interview-session.service';
+import { AdminAuthGuard } from './admin-auth.guard';
 
 export interface AdminSessionListQuery {
   page?: number;
@@ -51,6 +53,7 @@ export interface PaginatedResponse<T> {
 }
 
 @Controller('admin')
+@UseGuards(AdminAuthGuard)
 export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 

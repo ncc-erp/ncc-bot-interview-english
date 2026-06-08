@@ -159,3 +159,25 @@ export const updateSystemSettings = async (settings: Record<string, any>): Promi
     body: JSON.stringify(settings),
   });
 };
+
+export const login = async (
+  credentials: Record<string, any>
+): Promise<{ success: boolean; username: string }> => {
+  return apiFetch("/admin/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(credentials),
+  });
+};
+
+export const refreshAccessToken = async (): Promise<{ success: boolean }> => {
+  return apiFetch("/admin/auth/refresh", {
+    method: "POST",
+  });
+};
+
+export const logout = async (): Promise<{ success: boolean }> => {
+  return apiFetch("/admin/auth/logout", {
+    method: "POST",
+  });
+};

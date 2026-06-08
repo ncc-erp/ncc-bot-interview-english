@@ -176,6 +176,7 @@ export default function InterviewListPage() {
               style={{ width: 160 }}
             >
               <Option value="all">All statuses</Option>
+              <Option value="finished_session">Finished Session</Option>
               <Option value="completed">Completed</Option>
               <Option value="in_progress">In Progress</Option>
               <Option value="pending">Pending</Option>

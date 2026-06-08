@@ -78,6 +78,7 @@ export interface InterviewDetail extends Omit<InterviewListItem, "overallFeedbac
   messages: SessionMessage[];
   audioFile: string | null;
   audioFilePaths: string[];
+  candidateToken?: string;
 }
 
 export interface PaginatedResponse<T> {

@@ -5,7 +5,7 @@ import {
   Card, Descriptions, Tag, Progress, Collapse, Typography,
   Divider, Space, Tabs, Button, Spin, Alert, Rate, Popconfirm, message,
 } from "antd";
-import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, ReloadOutlined, CopyOutlined, LinkOutlined } from "@ant-design/icons";
 import { useRouter, useParams } from "next/navigation";
 import { getInterviewDetail, reEvaluateInterview, updateHrStar, type InterviewDetail } from "@/services/interviewService";
 
@@ -160,6 +160,36 @@ export default function InterviewDetailPage() {
           <Descriptions.Item label="Duration">
             {fmtDuration(data.durationSeconds)}
           </Descriptions.Item>
+          {data.candidateToken && (
+            <Descriptions.Item label="Candidate Result Link" span={2}>
+              <Space size="middle">
+                <a
+                  href={`/candidate-result/${data.candidateToken}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontWeight: 500 }}
+                >
+                  Get result link <LinkOutlined />
+                </a>
+                <Divider type="vertical" />
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => {
+                    const url = typeof window !== "undefined"
+                      ? `${window.location.origin}/candidate-result/${data.candidateToken}`
+                      : `/candidate-result/${data.candidateToken}`;
+                    navigator.clipboard.writeText(url);
+                    message.success("Copied candidate result link to clipboard!");
+                  }}
+                  style={{ padding: 0 }}
+                >
+                  Copy Link
+                </Button>
+              </Space>
+            </Descriptions.Item>
+          )}
         </Descriptions>
       </Card>
 

@@ -429,7 +429,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   // ─────────────────────────────────────────────
 
   private subscribeTranscript(roomName: string, sessionId: string, retry = 0): void {
-    const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;    
+    const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
     const url = `${baseUrl}/api/v2/sse/stream_transcript?room=${roomName}`;
 
     this.logger.log(`🎙️ Subscribing transcript SSE for room ${roomName} (retry=${retry})`);
@@ -536,7 +536,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     try {
       this.clearSilenceTimer(roomName);
-      
+
       const session = await this.sessionService.getSessionById(sessionId);
       if (!session) return;
 
@@ -576,9 +576,18 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, spokenCompletion, MessageType.TEXT);
       await this.agentService.sendTTS(roomName, spokenCompletion);
-      await this.sendChatMessage(roomName,
-        `🎉 Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to end the interview.`
-      );
+
+      const shouldSend = await this.sessionService.shouldSendResultLink();
+      let completeMsg = `🎉 Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to end the interview.`;
+      await this.sendChatMessage(roomName, completeMsg);
+
+      let resultMsg = '';
+      if (shouldSend) {
+        const adminOrigin = this.configService.get<string>('ADMIN_ORIGIN') || 'http://localhost:3000';
+        const candidateLink = `${adminOrigin}/candidate-result/${freshSession.candidateToken}`;
+        resultMsg = `🔗 **Your Interview Results:**\n${candidateLink}`;
+        await this.sendChatMessage(roomName, resultMsg, true);
+      }
       return;
     }
 
@@ -592,11 +601,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   }
 
   private startSilenceTimer(
-      roomName: string,
-      sessionId: string,
-      questionNumber: number,
-      totalQuestions: number,
-      retryCount = 0,
+    roomName: string,
+    sessionId: string,
+    questionNumber: number,
+    totalQuestions: number,
+    retryCount = 0,
   ): void {
     this.clearSilenceTimer(roomName);
 
@@ -610,12 +619,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
         if (retryCount < this.MAX_REASK_COUNT) {
           const currentQuestion =
-              session.messages
-                  ?.filter((m: any) =>
-                      m.role === MessageRole.ASSISTANT &&
-                      m.questionIndex === questionNumber
-                  )
-                  ?.at(-1)?.content;
+            session.messages
+              ?.filter((m: any) =>
+                m.role === MessageRole.ASSISTANT &&
+                m.questionIndex === questionNumber
+              )
+              ?.at(-1)?.content;
 
           const repeatText = currentQuestion || await this.interviewerService.generateQuestion(session, questionNumber);
 
@@ -631,11 +640,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
         // Save a placeholder answer so currentQuestionIndex advances
         await this.sessionService.addMessage(
-            sessionId,
-            MessageRole.USER,
-            '[No answer — skipped due to silence]',
-            MessageType.AUDIO,
-            questionNumber,
+          sessionId,
+          MessageRole.USER,
+          '[No answer — skipped due to silence]',
+          MessageType.AUDIO,
+          questionNumber,
         );
 
         const refreshed = await this.sessionService.getSessionById(sessionId);
@@ -664,9 +673,9 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     return val.toLowerCase() !== 'false' && val !== '0';
   }
 
-  private async sendChatMessage(roomName: string, text: string): Promise<void> {
-    if (!this.isChatEnabled()) return;
-    
+  private async sendChatMessage(roomName: string, text: string, isResultLink: boolean = false): Promise<void> {
+    if (!this.isChatEnabled() && !isResultLink) return;
+
     try {
       const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
       const agentId = this.agentService.getAgentIdForRoom(roomName);

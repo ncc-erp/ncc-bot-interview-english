@@ -141,4 +141,7 @@ export class InterviewSession {
 
   @Column({ default: false })
   isExternal: boolean; // true = external meeting (no Mezon clan channel)
+
+  @Column({ unique: true, nullable: true })
+  candidateToken: string;
 }

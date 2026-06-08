@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { InterviewSession, SessionStatus, SessionMode, SelectedSection, OverallFeedbackDto } from '../database-test/entities/interview-session-test.entity';
@@ -6,6 +7,8 @@ import { SessionMessage, MessageRole, MessageType } from '../database-test/entit
 import { TemplateService } from './template.service';
 import { UserService } from './user.service';
 import { QuestionSection } from '../database-test/entities/interview-template.entity';
+
+import { SystemSetting } from '../database-test/entities/system-setting.entity';
 
 @Injectable()
 export class InterviewSessionService {
@@ -16,9 +19,16 @@ export class InterviewSessionService {
     private readonly sessionRepo: Repository<InterviewSession>,
     @InjectRepository(SessionMessage)
     private readonly messageRepo: Repository<SessionMessage>,
+    @InjectRepository(SystemSetting)
+    private readonly settingRepo: Repository<SystemSetting>,
     private readonly templateService: TemplateService,
     private readonly userService: UserService,
   ) { }
+
+  async shouldSendResultLink(): Promise<boolean> {
+    const setting = await this.settingRepo.findOne({ where: { key: 'send_result_link_to_candidate' } });
+    return !setting || setting.value === 'true';
+  }
 
   /**
    * Create new interview session
@@ -90,6 +100,7 @@ export class InterviewSessionService {
       selectedSections,
       isExternal,
       roomId,
+      candidateToken: randomUUID(),
     });
 
     const savedSession = await this.sessionRepo.save(session);

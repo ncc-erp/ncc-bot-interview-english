@@ -503,6 +503,14 @@ export class AgentService {
 
       await this.sendTTS(session.roomName, spokenCompletion);
 
+      
+      let description = `Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session\n\n` +
+        `📝 Template: ${session.template.name}\n` +
+        `❓ Questions Answered: ${session.template.numberOfQuestions}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+      description += `👇 Click **Finish & Get Recording** to end the session and receive your audio recording.`;
+
       const channel = client.channels.get(channelId);
       if (channel) {
         await channel.send(
@@ -511,13 +519,7 @@ export class AgentService {
               new EmbedBuilder()
                 .setColor('#00cc66')
                 .setTitle('🎉 Interview Complete!')
-                .setDescription(
-                  `Congratulations! You have completed the interview. Thank you for your time joining this interview. You can click the button below to receive audio and end the interview session\n\n` +
-                  `📝 Template: ${session.template.name}\n` +
-                  `❓ Questions Answered: ${session.template.numberOfQuestions}\n\n` +
-                  `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                  `👇 Click **Finish & Get Recording** to end the session and receive your audio recording.`
-                )
+                .setDescription(description)
             )
             .addButton(
               new ButtonBuilder()

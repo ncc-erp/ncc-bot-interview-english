@@ -540,17 +540,15 @@ ${nextQuestion}
         );
         await this.agentService.sendTTS(session.roomName, spokenCompletion);
 
-        const completionMessage = `🎉 **Interview Complete!**
+        let completionMessage = `🎉 **Interview Complete!**
 
-"${spokenCompletion}"
+        "${spokenCompletion}"
 
-**Session Summary:**
- Template: ${session.template.name}
- Questions Answered: ${session.template.numberOfQuestions}
+        **Session Summary:**
+        Template: ${session.template.name}
+        Questions Answered: ${session.template.numberOfQuestions}
 
-━━━━━━━━━━━━━━━━━━━━━━
-
-⏳ Your interview recording will be available shortly...`;
+        ━━━━━━━━━━━━━━━━━━━━━━`;  
 
         const channel = client.channels.get(payload.channel_id);
         if (channel) {

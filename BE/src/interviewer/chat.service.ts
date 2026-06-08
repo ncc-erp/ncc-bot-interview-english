@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Nezon } from '@n0xgg04/nezon';
 import { AxiosClient } from '@/shared/lib/axios-client';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { SystemSetting } from '@/database-test/entities/system-setting.entity';
 
 @Injectable()
 export class ChatService {
@@ -11,6 +14,8 @@ export class ChatService {
   constructor(
     private readonly configService: ConfigService,
     private readonly axiosClient: AxiosClient,
+    @InjectRepository(SystemSetting)
+    private readonly settingRepo: Repository<SystemSetting>,
   ) {}
 
   /**
@@ -28,6 +33,7 @@ export class ChatService {
     channelId: string,
     templateName: string,
     audioUrls: string[],
+    candidateToken?: string,
   ): Promise<void> {
     if (!this.nezonClient) {
       this.logger.error('❌ Nezon client not initialized');
@@ -42,7 +48,7 @@ export class ChatService {
     }
 
     // Format message with audio links
-    const message = this.formatAudioLinksMessage(templateName, audioUrls);
+    const message = await this.formatAudioLinksMessage(templateName, audioUrls, candidateToken);
 
     try {
       await channel.send({ t: message });
@@ -56,7 +62,11 @@ export class ChatService {
   /**
    * Format audio links message
    */
-  private formatAudioLinksMessage(templateName: string, audioUrls: string[]): string {
+  private async formatAudioLinksMessage(
+    templateName: string,
+    audioUrls: string[],
+    candidateToken?: string,
+  ): Promise<string> {
     let message = `🎧 **Interview Recording Available**\n\n`;
     message += `Template: ${templateName}\n`;
     message += `Total Audio Files: ${audioUrls.length}\n\n`;

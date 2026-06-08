@@ -586,7 +586,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         const adminOrigin = this.configService.get<string>('ADMIN_ORIGIN') || 'http://localhost:3000';
         const candidateLink = `${adminOrigin}/candidate-result/${freshSession.candidateToken}`;
         resultMsg = `🔗 **Your Interview Results:**\n${candidateLink}`;
-        await this.sendChatMessage(roomName, resultMsg);
+        await this.sendChatMessage(roomName, resultMsg, true);
       }
       return;
     }
@@ -673,8 +673,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     return val.toLowerCase() !== 'false' && val !== '0';
   }
 
-  private async sendChatMessage(roomName: string, text: string): Promise<void> {
-    if (!this.isChatEnabled()) return;
+  private async sendChatMessage(roomName: string, text: string, isResultLink: boolean = false): Promise<void> {
+    if (!this.isChatEnabled() && !isResultLink) return;
 
     try {
       const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;

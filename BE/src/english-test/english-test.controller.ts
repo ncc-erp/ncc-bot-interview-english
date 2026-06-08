@@ -540,24 +540,15 @@ ${nextQuestion}
         );
         await this.agentService.sendTTS(session.roomName, spokenCompletion);
 
-        const shouldSend = await this.sessionService.shouldSendResultLink();
         let completionMessage = `🎉 **Interview Complete!**
 
-"${spokenCompletion}"
+        "${spokenCompletion}"
 
-**Session Summary:**
- Template: ${session.template.name}
- Questions Answered: ${session.template.numberOfQuestions}
+        **Session Summary:**
+        Template: ${session.template.name}
+        Questions Answered: ${session.template.numberOfQuestions}
 
-━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-        if (shouldSend) {
-          const adminOrigin = this.configService.get<string>('ADMIN_ORIGIN') || 'http://localhost:3000';
-          const candidateLink = `${adminOrigin}/candidate-result/${session.candidateToken}`;
-          completionMessage += `🔗 **Your Interview Results:**\n${candidateLink}\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-        }
-
-        completionMessage += `⏳ Your interview recording will be available shortly...`;
+        ━━━━━━━━━━━━━━━━━━━━━━`;  
 
         const channel = client.channels.get(payload.channel_id);
         if (channel) {

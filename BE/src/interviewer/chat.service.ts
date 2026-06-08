@@ -84,16 +84,6 @@ export class ChatService {
       });
       message += `\n`;
     }
-
-    const setting = await this.settingRepo.findOne({ where: { key: 'send_result_link_to_candidate' } });
-    const shouldSend = !setting || setting.value === 'true';
-
-    if (shouldSend && candidateToken) {
-      const adminOrigin = this.configService.get<string>('ADMIN_ORIGIN') || 'http://localhost:3000';
-      const candidateLink = `${adminOrigin}/candidate-result/${candidateToken}`;
-      message += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-      message += `🔗 **Your Interview Results:**\n${candidateLink}\n\n`;
-    }
     
     message += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     message += `💡 Click on the link(s) above to listen to your interview recording.`;

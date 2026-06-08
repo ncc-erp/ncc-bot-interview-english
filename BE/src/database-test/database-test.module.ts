@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule, InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 import { InterviewTemplate } from '../database-test/entities/interview-template.entity';
 import { InterviewSession } from '../database-test/entities/interview-session-test.entity';
 import { TemplateService } from '../interviewer/template.service';
@@ -10,6 +11,7 @@ import { User } from './entities/user-test.entity';
 import { CustomPrompt } from './entities/custom-prompt.entity';
 import { SessionMessage } from './entities/session-message.entity';
 import { SystemSetting } from './entities/system-setting.entity';
+import { Admin } from './entities/admin.entity';
 
 @Module({
   imports: [
@@ -23,17 +25,20 @@ import { SystemSetting } from './entities/system-setting.entity';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
-        entities: [User,
+        entities: [
+          User,
           CustomPrompt,
           InterviewTemplate,
           InterviewSession,
           SessionMessage,
-          SystemSetting,],
+          SystemSetting,
+          Admin,
+        ],
         synchronize: configService.get<string>('NODE_ENV') === 'development',
         logging: false,
       }),
     }),
-    TypeOrmModule.forFeature([User, CustomPrompt, InterviewTemplate, InterviewSession, SessionMessage, SystemSetting]),
+    TypeOrmModule.forFeature([User, CustomPrompt, InterviewTemplate, InterviewSession, SessionMessage, SystemSetting, Admin]),
   ],
   providers: [TemplateService, UserService],
   exports: [TemplateService, TypeOrmModule, UserService],
@@ -43,19 +48,32 @@ export class DatabaseTestModule implements OnModuleInit {
     private readonly templateService: TemplateService,
     @InjectRepository(SystemSetting)
     private readonly settingRepo: Repository<SystemSetting>,
+    @InjectRepository(Admin)
+    private readonly adminRepo: Repository<Admin>,
   ) {}
 
   async onModuleInit() {
     await this.templateService.seedDefaultTemplates();
     
     // Seed default settings
-    const existing = await this.settingRepo.findOne({ where: { key: 'send_result_link_to_candidate' } });
-    if (!existing) {
+    const existingSetting = await this.settingRepo.findOne({ where: { key: 'send_result_link_to_candidate' } });
+    if (!existingSetting) {
       await this.settingRepo.save({
         key: 'send_result_link_to_candidate',
         value: 'true',
       });
       console.log('🌱 Seeded default system setting send_result_link_to_candidate = true');
+    }
+
+    // Seed default admin credentials
+    const existingAdmin = await this.adminRepo.findOne({ where: { username: 'admin' } });
+    if (!existingAdmin) {
+      const passwordHash = crypto.createHash('sha256').update('123qwe').digest('hex');
+      await this.adminRepo.save({
+        username: 'admin',
+        passwordHash,
+      });
+      console.log('🌱 Seeded default admin user: admin / 123qwe (SHA-256 encrypted)');
     }
   }
 }

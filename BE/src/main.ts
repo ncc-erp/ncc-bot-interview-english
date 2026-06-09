@@ -9,8 +9,9 @@ async function bootstrap() {
 
   app.enableCors({
     origin: [
-      'http://localhost:3001',   // Next.js dev (adjust port if different)
+      'http://localhost:3001',   // Next.js local
       'http://localhost:3000',   // or same port if using proxy
+      'http://172.16.100.184:3003', // dev
       process.env.ADMIN_ORIGIN, // production origin from env
     ].filter(Boolean) as string[],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

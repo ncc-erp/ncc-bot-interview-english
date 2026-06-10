@@ -1,12 +1,29 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
+let accessToken: string | null = null;
 let isRefreshing: Promise<any> | null = null;
 
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: any = {
+    "Content-Type": "application/json",
+    ...init?.headers,
+  };
+
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    credentials: "include",
+    headers,
     cache: "no-store",
   });
 
@@ -21,17 +38,24 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       if (typeof window !== "undefined") {
         try {
           if (!isRefreshing) {
+            const refreshToken = localStorage.getItem("admin_refresh_token");
+            if (!refreshToken) {
+              throw new Error("No refresh token found");
+            }
+
             // Trigger token refresh call and save it as a shared promise
             isRefreshing = fetch(`${BASE_URL}/admin/auth/refresh`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              credentials: "include",
+              body: JSON.stringify({ refreshToken }),
             })
               .then(async (refreshRes) => {
                 if (!refreshRes.ok) {
                   throw new Error("Refresh token expired");
                 }
-                return refreshRes.json();
+                const data = await refreshRes.json();
+                accessToken = data.accessToken;
+                return data;
               })
               .finally(() => {
                 isRefreshing = null;
@@ -40,11 +64,13 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
           await isRefreshing;
 
-          // Retry original request
+          // Retry original request with the new access token
           return apiFetch(path, init);
         } catch (refreshErr) {
           // Refresh token is expired or invalid - clear credentials and redirect to login
           localStorage.removeItem("admin_username");
+          localStorage.removeItem("admin_refresh_token");
+          accessToken = null;
           window.location.href = "/login";
           throw refreshErr;
         }

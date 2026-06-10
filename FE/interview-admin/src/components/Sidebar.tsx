@@ -5,6 +5,7 @@ import { FileTextOutlined, MessageOutlined, LogoutOutlined } from "@ant-design/i
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { logout } from "@/services/interviewService";
+import { setAccessToken } from "@/lib/apiClient";
 
 const { Sider } = Layout;
 
@@ -49,6 +50,8 @@ export default function Sidebar() {
                 // Ignore API logout error, clear locally anyway
               }
               localStorage.removeItem("admin_username");
+              localStorage.removeItem("admin_refresh_token");
+              setAccessToken(null);
               message.success("Logged out successfully");
               router.push("/login");
             },

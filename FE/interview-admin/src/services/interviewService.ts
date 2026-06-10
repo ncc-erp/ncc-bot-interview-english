@@ -162,7 +162,7 @@ export const updateSystemSettings = async (settings: Record<string, any>): Promi
 
 export const login = async (
   credentials: Record<string, any>
-): Promise<{ success: boolean; username: string }> => {
+): Promise<{ success: boolean; username: string; accessToken: string; refreshToken: string }> => {
   return apiFetch("/admin/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -170,9 +170,11 @@ export const login = async (
   });
 };
 
-export const refreshAccessToken = async (): Promise<{ success: boolean }> => {
+export const refreshAccessToken = async (refreshToken: string): Promise<{ success: boolean; accessToken: string }> => {
   return apiFetch("/admin/auth/refresh", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
   });
 };
 

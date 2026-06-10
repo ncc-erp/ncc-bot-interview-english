@@ -18,11 +18,22 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
 export class AdminAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    
-    // Temporarily bypass authentication for debugging
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing or invalid authorization header');
+    }
+
+    const token = authHeader.split(' ')[1];
+    const payload = verifyJwt(token);
+    if (!payload) {
+      throw new UnauthorizedException('Invalid or expired access token');
+    }
+
+    // Attach stateless admin context to request
     request.admin = {
-      id: '00000000-0000-0000-0000-000000000000',
-      username: 'admin',
+      id: payload.sub,
+      username: payload.username,
     };
 
     return true;

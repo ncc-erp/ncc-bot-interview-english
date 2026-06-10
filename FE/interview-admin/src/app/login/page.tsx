@@ -5,6 +5,7 @@ import { Card, Form, Input, Button, Typography, message, Alert } from "antd";
 import { UserOutlined, LockOutlined, LoginOutlined } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { login } from "@/services/interviewService";
+import { setAccessToken } from "@/lib/apiClient";
 
 const { Title, Text } = Typography;
 
@@ -31,6 +32,9 @@ export default function LoginPage() {
       });
 
       localStorage.setItem("admin_username", res.username);
+      localStorage.setItem("admin_refresh_token", res.refreshToken);
+      setAccessToken(res.accessToken);
+      
       message.success("Logged in successfully!");
       
       // Delay slightly for smooth transition

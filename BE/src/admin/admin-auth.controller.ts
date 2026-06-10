@@ -32,7 +32,6 @@ export class AdminAuthController {
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() body: Record<string, any>,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const { username, password } = body;
 
@@ -66,27 +65,19 @@ export class AdminAuthController {
     admin.refreshTokenExpiresAt = refreshTokenExpiresAt;
     await this.adminRepo.save(admin);
 
-    // Set secure HttpOnly cookies
-    res.setHeader('Set-Cookie', [
-      `accessToken=${accessToken}; Path=/; HttpOnly; Max-Age=${15 * 60}; SameSite=Lax`,
-      `refreshToken=${refreshToken}; Path=/; HttpOnly; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`,
-    ]);
-
     return {
       success: true,
       username: admin.username,
+      accessToken,
+      refreshToken,
     };
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
+    @Body('refreshToken') refreshToken: string,
   ) {
-    const cookies = parseCookies(req.headers.cookie);
-    const refreshToken = cookies['refreshToken'];
-
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token is missing');
     }
@@ -111,12 +102,9 @@ export class AdminAuthController {
     const exp = Math.floor(Date.now() / 1000) + 15 * 60;
     const accessToken = signJwt({ sub: admin.id, username: admin.username, exp });
 
-    res.setHeader('Set-Cookie', [
-      `accessToken=${accessToken}; Path=/; HttpOnly; Max-Age=${15 * 60}; SameSite=Lax`,
-    ]);
-
     return {
       success: true,
+      accessToken,
     };
   }
 
@@ -125,7 +113,6 @@ export class AdminAuthController {
   @HttpCode(HttpStatus.OK)
   async logout(
     @Req() req: any,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const adminContext = req.admin;
     if (adminContext && adminContext.id) {
@@ -136,12 +123,6 @@ export class AdminAuthController {
         await this.adminRepo.save(admin);
       }
     }
-
-    // Clear secure HttpOnly cookies
-    res.setHeader('Set-Cookie', [
-      `accessToken=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax`,
-      `refreshToken=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax`,
-    ]);
 
     return { success: true };
   }

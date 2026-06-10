@@ -18,12 +18,16 @@ export default function LayoutClient({ children }: any) {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const username = localStorage.getItem("admin_username");
+      let username = localStorage.getItem("admin_username");
       const isPublicPath = isCandidatePage || isLoginPage;
 
-      if (!username && !isPublicPath) {
-        router.push("/login");
-      } else if (username && isLoginPage) {
+      // Temporarily bypass login check
+      if (!username) {
+        username = "admin";
+        localStorage.setItem("admin_username", "admin");
+      }
+
+      if (username && isLoginPage) {
         router.push("/interviews");
       } else {
         setCheckingAuth(false);

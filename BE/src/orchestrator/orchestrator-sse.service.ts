@@ -586,6 +586,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         const adminOrigin = this.configService.get<string>('ADMIN_ORIGIN') || 'http://localhost:3000';
         const candidateLink = `${adminOrigin}/candidate-result/${freshSession.candidateToken}`;
         resultMsg = `🔗 **Your Interview Results:**\n${candidateLink}`;
+        await this.sendChatMessage(roomName, "The results are currently being processed and will be available within 5 minutes.", true);
         await this.sendChatMessage(roomName, resultMsg, true);
       }
       return;

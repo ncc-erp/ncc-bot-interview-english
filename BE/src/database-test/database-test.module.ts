@@ -70,6 +70,7 @@ export class DatabaseTestModule implements OnModuleInit {
     if (!existingAdmin) {
       const passwordHash = crypto.createHash('sha256').update('123qwe').digest('hex');
       await this.adminRepo.save({
+        id: crypto.randomUUID(),
         username: 'admin',
         passwordHash,
       });

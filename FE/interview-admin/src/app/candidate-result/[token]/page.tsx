@@ -35,8 +35,8 @@ function fmtDuration(seconds: number | null): string {
 function getCriteriaColor(val: string): string {
   const clean = val.toLowerCase().trim();
   if (clean.includes("excellent")) return "green";
-  if (clean.includes("very good")) return "cyan";
-  if (clean.includes("good")) return "blue";
+  if (clean.includes("very good")) return "blue";
+  if (clean.includes("good")) return "cyan";
   if (clean.includes("satisfactory")) return "orange";
   if (clean.includes("needs improvement") || clean.includes("improvement")) return "red";
   return "default";

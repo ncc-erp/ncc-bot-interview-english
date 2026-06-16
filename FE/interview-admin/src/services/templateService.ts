@@ -2,7 +2,7 @@ import { apiFetch } from "@/lib/apiClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type InterviewLevel = "beginner" | "intermediate" | "advanced";
+export type InterviewLevel = "intern" | "fresher" | "junior" | "middle" | "senior" | "lead" | "manager" | "staff";
 export type InterviewType = "general" | "technical" | "behavioral" | "situational";
 
 export interface QuestionSection {
@@ -18,6 +18,8 @@ export interface InterviewTemplate {
   description: string;
   type: InterviewType;
   level: InterviewLevel;
+  position: string;
+  isAiGenerated: boolean;
   systemPrompt: string;
   sampleQuestions: string[];
   numberOfQuestions: number;
@@ -32,6 +34,8 @@ export interface TemplateFormData {
   description: string;
   type: InterviewType;
   level: InterviewLevel;
+  position: string;
+  isAiGenerated: boolean;
   systemPrompt: string;
   sampleQuestions: string[];
   numberOfQuestions: number;

@@ -167,6 +167,7 @@ export default function TemplateFormPage({ mode }: Props) {
   const id = params?.id as string | undefined;
 
   const [form] = Form.useForm();
+  const isAiGenerated = Form.useWatch("isAiGenerated", form) !== false;
   const [loading, setLoading] = useState(mode === "edit");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +187,8 @@ export default function TemplateFormPage({ mode }: Props) {
           description: t.description,
           type: t.type,
           level: t.level,
+          position: t.position ?? "General",
+          isAiGenerated: t.isAiGenerated !== false,
           systemPrompt: t.systemPrompt,
           sampleQuestions: (t.sampleQuestions ?? []).join("\n"),
           numberOfQuestions: t.numberOfQuestions,
@@ -232,7 +235,9 @@ export default function TemplateFormPage({ mode }: Props) {
         description: values.description ?? "",
         type: values.type,
         level: values.level,
-        systemPrompt: values.systemPrompt,
+        position: values.position?.trim() || "General",
+        isAiGenerated: !!values.isAiGenerated,
+        systemPrompt: values.isAiGenerated ? values.systemPrompt : "",
         sampleQuestions,
         numberOfQuestions: values.numberOfQuestions,
         questionSections: useSections && sections.length > 0 ? sections : null,
@@ -281,7 +286,7 @@ export default function TemplateFormPage({ mode }: Props) {
         <Alert type="error" message={error} closable onClose={() => setError(null)} style={{ marginBottom: 16 }} />
       )}
 
-      <Form form={form} layout="vertical" initialValues={{ type: "general", level: "intermediate", numberOfQuestions: 5, isActive: true }}>
+      <Form form={form} layout="vertical" initialValues={{ type: "general", level: "staff", position: "General", isAiGenerated: true, numberOfQuestions: 5, isActive: true }}>
         <Tabs
           items={[
             {
@@ -309,10 +314,23 @@ export default function TemplateFormPage({ mode }: Props) {
 
                     <Form.Item label="Level" name="level" rules={[{ required: true }]}>
                       <Select>
-                        <Option value="beginner">Beginner</Option>
-                        <Option value="intermediate">Intermediate</Option>
-                        <Option value="advanced">Advanced</Option>
+                        <Option value="intern">Intern</Option>
+                        <Option value="fresher">Fresher</Option>
+                        <Option value="junior">Junior</Option>
+                        <Option value="middle">Middle</Option>
+                        <Option value="senior">Senior</Option>
+                        <Option value="lead">Lead</Option>
+                        <Option value="manager">Manager</Option>
+                        <Option value="staff">Staff</Option>
                       </Select>
+                    </Form.Item>
+
+                    <Form.Item label="Position" name="position" rules={[{ required: true, message: "Position is required" }]}>
+                      <Input placeholder="e.g. BA, Tester, Developer, Sale, General" />
+                    </Form.Item>
+
+                    <Form.Item label="AI Generated" name="isAiGenerated" valuePropName="checked">
+                      <Switch checkedChildren="Yes" unCheckedChildren="No" />
                     </Form.Item>
                   </div>
 
@@ -326,31 +344,33 @@ export default function TemplateFormPage({ mode }: Props) {
                 </Card>
               ),
             },
-            {
-              key: "prompt",
-              label: "System Prompt",
-              children: (
-                <Card>
-                  <Form.Item
-                    label="System Prompt"
-                    name="systemPrompt"
-                    rules={[{ required: true, message: "System prompt is required" }]}
-                    extra="Instructions that guide the AI interviewer's behavior."
-                  >
-                    <TextArea rows={16} placeholder="You are an experienced HR interviewer..." style={{ fontFamily: "monospace", fontSize: 13 }} />
-                  </Form.Item>
-                </Card>
-              ),
-            },
+            ...(isAiGenerated ? [
+              {
+                key: "prompt",
+                label: "System Prompt",
+                children: (
+                  <Card>
+                    <Form.Item
+                      label="System Prompt"
+                      name="systemPrompt"
+                      rules={[{ required: true, message: "System prompt is required" }]}
+                      extra="Instructions that guide the AI interviewer's behavior."
+                    >
+                      <TextArea rows={16} placeholder="You are an experienced HR interviewer..." style={{ fontFamily: "monospace", fontSize: 13 }} />
+                    </Form.Item>
+                  </Card>
+                ),
+              }
+            ] : []),
             {
               key: "questions",
-              label: "Sample Questions",
+              label: isAiGenerated ? "Sample Questions" : "Predefined Questions Pool",
               children: (
                 <Card>
                   <Form.Item
-                    label="Sample Questions"
+                    label={isAiGenerated ? "Sample Questions" : "Predefined Questions"}
                     name="sampleQuestions"
-                    extra="One question per line. These are used as reference or fallback questions."
+                    extra={isAiGenerated ? "One question per line. These are used as reference or fallback questions." : "One question per line. The bot will present these exact questions during the interview."}
                   >
                     <TextArea
                       rows={12}

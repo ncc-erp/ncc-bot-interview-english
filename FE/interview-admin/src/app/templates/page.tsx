@@ -15,9 +15,14 @@ import {
 } from "@/services/templateService";
 
 const LEVEL_COLOR: Record<string, string> = {
-  beginner:     "blue",
-  intermediate: "purple",
-  advanced:     "orange",
+  intern:       "blue",
+  fresher:      "cyan",
+  junior:       "green",
+  middle:       "geekblue",
+  senior:       "purple",
+  lead:         "magenta",
+  manager:      "red",
+  staff:        "orange",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -75,6 +80,16 @@ export default function TemplateListPage() {
       ),
     },
     {
+      title: "Position",
+      dataIndex: "position",
+      width: 120,
+      render: (position: string) => (
+        <Tag color="blue" style={{ fontWeight: 500 }}>{position || "General"}</Tag>
+      ),
+      filters: Array.from(new Set(templates.map(t => t.position || "General"))).map(p => ({ text: p, value: p })),
+      onFilter: (value: any, record: InterviewTemplate) => (record.position || "General") === value,
+    },
+    {
       title: "Type",
       dataIndex: "type",
       width: 120,
@@ -83,6 +98,13 @@ export default function TemplateListPage() {
           {type}
         </Tag>
       ),
+      filters: [
+        { text: "General", value: "general" },
+        { text: "Technical", value: "technical" },
+        { text: "Behavioral", value: "behavioral" },
+        { text: "Situational", value: "situational" },
+      ],
+      onFilter: (value: any, record: InterviewTemplate) => record.type === value,
     },
     {
       title: "Level",
@@ -93,6 +115,33 @@ export default function TemplateListPage() {
           {level}
         </Tag>
       ),
+      filters: [
+        { text: "Intern", value: "intern" },
+        { text: "Fresher", value: "fresher" },
+        { text: "Junior", value: "junior" },
+        { text: "Middle", value: "middle" },
+        { text: "Senior", value: "senior" },
+        { text: "Lead", value: "lead" },
+        { text: "Manager", value: "manager" },
+        { text: "Staff", value: "staff" },
+      ],
+      onFilter: (value: any, record: InterviewTemplate) => record.level === value,
+    },
+    {
+      title: "Mode",
+      dataIndex: "isAiGenerated",
+      width: 120,
+      align: "center" as const,
+      render: (isAiGenerated: boolean) => (
+        <Tag color={isAiGenerated !== false ? "purple" : "default"}>
+          {isAiGenerated !== false ? "AI Generated" : "Predefined"}
+        </Tag>
+      ),
+      filters: [
+        { text: "AI Generated", value: true },
+        { text: "Predefined", value: false },
+      ],
+      onFilter: (value: any, record: InterviewTemplate) => (record.isAiGenerated !== false) === value,
     },
     {
       title: "Questions",

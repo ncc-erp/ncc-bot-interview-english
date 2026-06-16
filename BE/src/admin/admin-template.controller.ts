@@ -90,7 +90,7 @@ export class AdminTemplateController {
   @HttpCode(HttpStatus.CREATED)
   async createTemplate(@Body() dto: CreateTemplateDto): Promise<InterviewTemplate> {
     if (!dto.name?.trim()) throw new BadRequestException('Name is required');
-    if (!dto.isAiGenerated && !dto.questionSections?.length && !dto.sampleQuestions?.length) {
+    if (dto.isAiGenerated === false && !dto.questionSections?.length && !dto.sampleQuestions?.length) {
       throw new BadRequestException('Non-AI template must have questions');
     }
 

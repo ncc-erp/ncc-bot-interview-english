@@ -17,7 +17,7 @@ export class AddTemplatePositionAndAiToggle1781517434849 implements MigrationInt
     public async down(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`CREATE TYPE "public"."interview_templates_level_enum_old" AS ENUM('beginner', 'intermediate', 'advanced')`);
         await queryRunner.query(`ALTER TABLE "interview_templates" ALTER COLUMN "level" DROP DEFAULT`);
-        await queryRunner.query(`ALTER TABLE "interview_templates" ALTER COLUMN "level" TYPE "public"."interview_templates_level_enum_old" USING "level"::"text"::"public"."interview_templates_level_enum_old"`);
+        await queryRunner.query(`ALTER TABLE "interview_templates" ALTER COLUMN "level" TYPE "public"."interview_templates_level_enum_old" USING (CASE "level"::text WHEN 'intern' THEN 'beginner' WHEN 'fresher' THEN 'beginner' WHEN 'junior' THEN 'beginner' WHEN 'middle' THEN 'intermediate' WHEN 'staff' THEN 'intermediate' WHEN 'senior' THEN 'advanced' WHEN 'lead' THEN 'advanced' WHEN 'manager' THEN 'advanced' ELSE 'intermediate' END)::"public"."interview_templates_level_enum_old"`);
         await queryRunner.query(`ALTER TABLE "interview_templates" ALTER COLUMN "level" SET DEFAULT 'intermediate'`);
         await queryRunner.query(`DROP TYPE "public"."interview_templates_level_enum"`);
         await queryRunner.query(`ALTER TYPE "public"."interview_templates_level_enum_old" RENAME TO "interview_templates_level_enum"`);

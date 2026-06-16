@@ -27,6 +27,8 @@ export class CreateTemplateDto {
   description: string;
   type: InterviewType;
   level: InterviewLevel;
+  position?: string;
+  isAiGenerated?: boolean;
   systemPrompt: string;
   sampleQuestions: string[];
   numberOfQuestions: number;
@@ -39,6 +41,8 @@ export class UpdateTemplateDto {
   description?: string;
   type?: InterviewType;
   level?: InterviewLevel;
+  position?: string;
+  isAiGenerated?: boolean;
   systemPrompt?: string;
   sampleQuestions?: string[];
   numberOfQuestions?: number;
@@ -86,14 +90,18 @@ export class AdminTemplateController {
   @HttpCode(HttpStatus.CREATED)
   async createTemplate(@Body() dto: CreateTemplateDto): Promise<InterviewTemplate> {
     if (!dto.name?.trim()) throw new BadRequestException('Name is required');
-    if (!dto.systemPrompt?.trim()) throw new BadRequestException('System prompt is required');
+    if (!dto.isAiGenerated && !dto.questionSections?.length && !dto.sampleQuestions?.length) {
+      throw new BadRequestException('Non-AI template must have questions');
+    }
 
     const template = this.templateRepo.create({
       name: dto.name.trim(),
       description: dto.description?.trim() ?? '',
       type: dto.type ?? InterviewType.GENERAL,
-      level: dto.level ?? InterviewLevel.INTERMEDIATE,
-      systemPrompt: dto.systemPrompt.trim(),
+      level: dto.level ?? InterviewLevel.STAFF,
+      position: dto.position?.trim() || 'General',
+      isAiGenerated: dto.isAiGenerated ?? true,
+      systemPrompt: dto.systemPrompt?.trim() ?? '',
       sampleQuestions: dto.sampleQuestions ?? [],
       numberOfQuestions: dto.numberOfQuestions ?? 5,
       questionSections: dto.questionSections ?? null,
@@ -121,6 +129,8 @@ export class AdminTemplateController {
       ...(dto.description !== undefined && { description: dto.description.trim() }),
       ...(dto.type !== undefined && { type: dto.type }),
       ...(dto.level !== undefined && { level: dto.level }),
+      ...(dto.position !== undefined && { position: dto.position.trim() }),
+      ...(dto.isAiGenerated !== undefined && { isAiGenerated: dto.isAiGenerated }),
       ...(dto.systemPrompt !== undefined && { systemPrompt: dto.systemPrompt.trim() }),
       ...(dto.sampleQuestions !== undefined && { sampleQuestions: dto.sampleQuestions }),
       ...(dto.numberOfQuestions !== undefined && { numberOfQuestions: dto.numberOfQuestions }),

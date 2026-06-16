@@ -11,10 +11,12 @@ import { AxiosClient } from '@/shared/lib/axios-client';
 import { AGENT_ENDPOINTS } from '@/shared/constants/agent';
 import { BotAuthService } from '@/auth/bot-auth.service';
 import { EventSourcePolyfill } from 'event-source-polyfill';
+import { InterviewLevel, InterviewTemplate } from '@/database-test/entities/interview-template.entity';
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OrchestratorSSEService.name);
+  private readonly GREETING_TIMEOUT_MS = 12000;
 
   // Global SSE connections (started once on boot)
   private metadataSSE: EventSourcePolyfill | null = null;
@@ -322,28 +324,58 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Parse template number: *start 2 → index 1
+      // Parse start command arguments: *start [level] [position]
       const parts = message.trim().split(/\s+/);
-      const templateNumber = parts[1] ? parseInt(parts[1], 10) : NaN;
+      const templateIndexOrLevel = parts[1];
+      const positionStr = parts.slice(2).join(' ');
 
-      const templates = await this.templateService.getActiveTemplates();
-      if (!templates.length) {
-        await this.sendChatMessage(roomName, '❌ No interview templates available.');
-        return;
-      }
+      let selectedTemplate: any = null;
 
-      const DEFAULT_TEMPLATE_NAME = 'Non-AI Generate Interview';
-      let selectedTemplate =
-        templates.find(t => t.name === DEFAULT_TEMPLATE_NAME) ?? templates[0];
+      // Check for legacy index lookup (e.g., *start 2)
+      const templateNumber = templateIndexOrLevel ? parseInt(templateIndexOrLevel, 10) : NaN;
+      if (!isNaN(templateNumber)) {
+        const templates = await this.templateService.getActiveTemplates();
+        if (templateNumber >= 1 && templateNumber <= templates.length) {
+          selectedTemplate = templates[templateNumber - 1];
+        } else {
+          await this.sendChatMessage(
+            roomName,
+            `❌ Invalid template number. Use *templates to see available options.`
+          );
+          return;
+        }
+      } else {
+        // Parse level and position
+        let level = InterviewLevel.STAFF; // default level fallback
+        let position = 'General'; // default position fallback
 
-      if (!isNaN(templateNumber) && templateNumber >= 1 && templateNumber <= templates.length) {
-        selectedTemplate = templates[templateNumber - 1];
-      } else if (!isNaN(templateNumber)) {
-        await this.sendChatMessage(
-          roomName,
-          `❌ Invalid template number. Use *templates to see available options.`
-        );
-        return;
+        if (templateIndexOrLevel) {
+          const lowerArg = templateIndexOrLevel.toLowerCase();
+          const validLevels = Object.values(InterviewLevel);
+
+          if (validLevels.includes(lowerArg as InterviewLevel)) {
+            level = lowerArg as InterviewLevel;
+            if (positionStr) {
+              position = positionStr;
+            }
+          } else {
+            // First argument is not a level enum value, so we treat the entire rest of command as position
+            position = parts.slice(1).join(' ');
+            level = InterviewLevel.STAFF;
+          }
+        }
+
+        // Find template using the fallback chain
+        selectedTemplate = await this.templateService.findActiveByPositionAndLevel(position, level);
+
+        if (!selectedTemplate) {
+          await this.sendChatMessage(
+            roomName,
+            `❌ No active interview template found for position "${position}" and level "${level}".`,
+            true
+          );
+          return;
+        }
       }
       await this.sendChatMessage(roomName, `⏳ Starting interview with template: ${selectedTemplate.name}...`);
 
@@ -364,13 +396,13 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       await this.sessionService.startSession(session.id);
       this.logger.log(`✅ Session ${session.id} created for room ${roomName}`);
 
-      // Invite agent + setup transcript SSE
-      await this.agentService.enableTranscript(roomName);
+      // Invite agent first to avoid long AI greeting delays before bot joins room
+      await this.agentService.handleInviteAgentExternal(roomName, session.id);
       // Subscribe transcript SSE for this room
       this.subscribeTranscript(roomName, session.id);
 
-      // Generate and send greeting
-      const greeting = await this.interviewerService.generateGreeting(selectedTemplate);
+      const greeting = await this.generateGreetingWithTimeout(selectedTemplate);
+
       await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, greeting, MessageType.TEXT);
 
       await this.agentService.sendTTS(roomName, greeting);
@@ -379,6 +411,25 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     } catch (error: any) {
       this.logger.error(`Error in handleStartCommand:`, error);
       await this.sendChatMessage(roomName, `❌ Failed to start interview: ${error.message}`);
+    }
+  }
+
+  private async generateGreetingWithTimeout(template: InterviewTemplate): Promise<string> {
+    const fallbackGreeting = `Hello! Welcome to the interview. I'll be asking you ${template.numberOfQuestions} questions. Please answer each question clearly and take your time. When you're ready, open your micro and say "ready" to begin.`;
+
+    try {
+      return await Promise.race([
+        this.interviewerService.generateGreeting(template),
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve(fallbackGreeting), this.GREETING_TIMEOUT_MS),
+        ),
+      ]);
+    } catch (error) {
+      this.logger.warn(
+        `[Start] Failed to generate AI greeting for template ${template?.name}, using fallback.`,
+        (error as Error)?.message,
+      );
+      return fallbackGreeting;
     }
   }
 
@@ -449,7 +500,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         const identity = parsed.participant_identity || '';
 
         // Ignore bot's own speech
-        // if (identity.startsWith('agent-') || identity.includes('UNKNOWN')) return;
+        if (identity.startsWith('agent-')) return;
 
         if (parsed.type === 'PARTIAL') {
           this.resetDebounce(roomName, sessionId);
@@ -674,8 +725,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     return val.toLowerCase() !== 'false' && val !== '0';
   }
 
-  private async sendChatMessage(roomName: string, text: string, isResultLink: boolean = false): Promise<void> {
-    if (!this.isChatEnabled() && !isResultLink) return;
+  private async sendChatMessage(roomName: string, text: string, isSend: boolean = false): Promise<void> {
+    if (!this.isChatEnabled() && !isSend) return;
 
     try {
       const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
@@ -684,7 +735,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         `${baseUrl}/api/v2/dispatch/agent-request`,
         {
           room_name: roomName,
-          agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+          agent_id: agentId || 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
           payload: {
             request_type: 'send_chat_message',
             message: text,

@@ -6,7 +6,7 @@ import { InterviewSession, SessionStatus, SessionMode, SelectedSection, OverallF
 import { SessionMessage, MessageRole, MessageType } from '../database-test/entities/session-message.entity';
 import { TemplateService } from './template.service';
 import { UserService } from './user.service';
-import { QuestionSection } from '../database-test/entities/interview-template.entity';
+import { QuestionSection, InterviewLevel } from '../database-test/entities/interview-template.entity';
 
 import { SystemSetting } from '../database-test/entities/system-setting.entity';
 
@@ -38,16 +38,34 @@ export class InterviewSessionService {
     username: string,
     channelId: string,
     roomName: string,
-    templateId: string,
+    templateId: string | null,
     mode: SessionMode = SessionMode.TEXT,
     isExternal = false,
     roomId: string = null,
+    position?: string,
+    level?: InterviewLevel,
   ): Promise<InterviewSession> {
     // Find or create user
     const user = await this.userService.findOrCreateUser(mezonUserId, username);
 
     // Get template with full info
-    const template = await this.templateService.getTemplateById(templateId);
+    let template;
+    if (templateId) {
+      template = await this.templateService.getTemplateById(templateId);
+    } else if (position && level) {
+      template = await this.templateService.findActiveByPositionAndLevel(position, level);
+      if (!template) {
+        throw new BadRequestException(
+          `No active interview templates found for position "${position}" and level "${level}".`
+        );
+      }
+    } else {
+      // Default fallback if neither is provided
+      template = await this.templateService.findActiveByPositionAndLevel('General', InterviewLevel.STAFF);
+      if (!template) {
+        throw new BadRequestException('No default interview template found.');
+      }
+    }
 
     // Check for active session
     const existingSession = await this.getActiveSession(user.id, channelId);
@@ -89,7 +107,7 @@ export class InterviewSessionService {
       userId: user.mezonUserId,
       channelId,
       roomName,
-      templateId,
+      templateId: template.id,
       template, // Include template relation
       mode,
       status: SessionStatus.PENDING,

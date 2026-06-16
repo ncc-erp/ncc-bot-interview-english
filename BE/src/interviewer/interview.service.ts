@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InterviewSession, SelectedSection } from '../database-test/entities/interview-session-test.entity';
 import { MessageRole } from '../database-test/entities/session-message.entity';
 import { InterviewTemplate } from '@/database-test/entities/interview-template.entity';
-import { AIService } from './ai.service'; 
+import { AIService } from './ai.service';
 
 @Injectable()
 export class EnhancedInterviewerService {
@@ -23,7 +23,7 @@ export class EnhancedInterviewerService {
   }
 
   async generateGreeting(template: InterviewTemplate): Promise<string> {
-    if (template.name === 'Non-AI Generate Interview') {
+    if (!template.isAiGenerated) {
     // Check if using sections
     if (template.questionSections && template.questionSections.length > 0) {
       const sectionsSummary = template.questionSections
@@ -46,7 +46,7 @@ Number of questions: ${template.numberOfQuestions}
 TASK: Generate a warm, professional greeting (2-3 sentences).
 - Welcome the candidate and don't need to mention their name here just welcome without mention their or your name
 - Briefly explain you'll ask ${template.numberOfQuestions} questions
-- Ask them to speak or type "start", "ready", or "begin" when they're ready to start
+- Ask them to say "ready" when they're ready to start
 
 Keep it warm and encouraging.`;
 
@@ -67,7 +67,7 @@ Keep it warm and encouraging.`;
   ): Promise<string> {
     const isLastQuestion = questionNumber === session.template.numberOfQuestions;
 
-    if (session.template.name === 'Non-AI Generate Interview') {
+    if (!session.template.isAiGenerated) {
       return this.getPreDefinedQuestion(session, questionNumber);
     }
 
@@ -80,6 +80,13 @@ Keep it warm and encouraging.`;
       ).join('\n')}`
       : '';
 
+    const rawSampleQs = session.template.sampleQuestions;
+    const sampleQuestions = Array.isArray(rawSampleQs)
+      ? rawSampleQs
+      : (typeof rawSampleQs === 'string' && rawSampleQs
+        ? (rawSampleQs as string).split(',').map(q => q.trim()).filter(Boolean)
+        : []);
+
     const systemPrompt = `${session.template.systemPrompt}
 
 CURRENT STATE:
@@ -91,14 +98,14 @@ ${isLastQuestion ? '- ⚠️ THIS IS THE FINAL QUESTION!' : ''}
 ${conversationContext}
 
 SAMPLE QUESTIONS FOR REFERENCE:
-${session.template.sampleQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+${sampleQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
 INSTRUCTIONS FOR QUESTION ${questionNumber}:
 1. Follow the interview structure and rules defined in your system prompt above
 2. Review the conversation history carefully
 3. Reference specific details the candidate mentioned
 4. ${recentMessages.length > 0 ? 'Acknowledge their previous answer naturally' : 'Start the interview appropriately'}
-5. Generate ONE clear, engaging question that fits this point in the interview
+5. Generate ONE short, clear, engaging question that fits this point in the interview
 6. ${isLastQuestion ? 'Make it a strong closing question' : 'Maintain natural conversation flow'}
 7. Adjust difficulty and depth based on their previous responses
 
@@ -127,7 +134,7 @@ Generate question ${questionNumber} now:`;
     improvements: string[];
     totalScore: number;
   }> {
-    if (session.template.name === 'Non-AI Generate Interview') {
+    if (!session.template.isAiGenerated) {
     return {
       overall: `Thank you for completing the ${session.template.name}. All ${session.template.numberOfQuestions} questions have been answered.`,
       strengths: [],
@@ -294,7 +301,12 @@ Be specific, encouraging, and reference actual examples from their answers.`;
     const questionIndex = questionNumber - 1;
 
     // Use selectedQuestions if available (for randomized Non-AI template)
-    const questions = session.selectedQuestions || session.template.sampleQuestions;
+    const rawQuestions = session.selectedQuestions || session.template.sampleQuestions;
+    const questions = Array.isArray(rawQuestions)
+      ? rawQuestions
+      : (typeof rawQuestions === 'string' && rawQuestions
+        ? (rawQuestions as string).split(',').map(q => q.trim()).filter(Boolean)
+        : []);
 
     if (questionIndex >= questions.length) {
       this.logger.warn(

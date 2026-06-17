@@ -134,6 +134,8 @@ Generate question ${questionNumber} now:`;
     improvements: string[];
     totalScore: number;
   }> {
+    /* 
+    // AI - generated feedback format: 
     if (!session.template.isAiGenerated) {
     return {
       overall: `Thank you for completing the ${session.template.name}. All ${session.template.numberOfQuestions} questions have been answered.`,
@@ -222,6 +224,14 @@ Be specific, encouraging, and reference actual examples from their answers.`;
         totalScore: 7,
       };
     }
+    */
+
+    return {
+      overall: `Thank you for completing the ${session.template.name}. All ${session.template.numberOfQuestions} questions have been answered.`,
+      strengths: [],
+      improvements: [],
+      totalScore: 0,
+    };
   }
 
   private parseFeedbackSections(response: string): {

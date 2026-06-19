@@ -6,7 +6,7 @@ import { InterviewSession, SessionStatus, SessionMode, SelectedSection, OverallF
 import { SessionMessage, MessageRole, MessageType } from '../database-test/entities/session-message.entity';
 import { TemplateService } from './template.service';
 import { UserService } from './user.service';
-import { QuestionSection, InterviewLevel } from '../database-test/entities/interview-template.entity';
+import { QuestionSection } from '../database-test/entities/interview-template.entity';
 
 import { SystemSetting } from '../database-test/entities/system-setting.entity';
 
@@ -42,8 +42,6 @@ export class InterviewSessionService {
     mode: SessionMode = SessionMode.TEXT,
     isExternal = false,
     roomId: string = null,
-    position?: string,
-    level?: InterviewLevel,
   ): Promise<InterviewSession> {
     // Find or create user
     const user = await this.userService.findOrCreateUser(mezonUserId, username);
@@ -52,19 +50,9 @@ export class InterviewSessionService {
     let template;
     if (templateId) {
       template = await this.templateService.getTemplateById(templateId);
-    } else if (position && level) {
-      template = await this.templateService.findActiveByPositionAndLevel(position, level);
-      if (!template) {
-        throw new BadRequestException(
-          `No active interview templates found for position "${position}" and level "${level}".`
-        );
-      }
     } else {
       // Default fallback if neither is provided
-      template = await this.templateService.findActiveByPositionAndLevel('General', InterviewLevel.STAFF);
-      if (!template) {
-        throw new BadRequestException('No default interview template found.');
-      }
+      template = await this.templateService.getDefaultTemplate();
     }
 
     // Check for active session

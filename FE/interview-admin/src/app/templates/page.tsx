@@ -14,24 +14,6 @@ import {
   type InterviewTemplate,
 } from "@/services/templateService";
 
-const LEVEL_COLOR: Record<string, string> = {
-  intern:       "blue",
-  fresher:      "cyan",
-  junior:       "green",
-  middle:       "geekblue",
-  senior:       "purple",
-  lead:         "magenta",
-  manager:      "red",
-  staff:        "orange",
-};
-
-const TYPE_COLOR: Record<string, string> = {
-  general:     "default",
-  technical:   "cyan",
-  behavioral:  "green",
-  situational: "volcano",
-};
-
 export default function TemplateListPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<InterviewTemplate[]>([]);
@@ -78,54 +60,6 @@ export default function TemplateListPage() {
           </div>
         </div>
       ),
-    },
-    {
-      title: "Position",
-      dataIndex: "position",
-      width: 120,
-      render: (position: string) => (
-        <Tag color="blue" style={{ fontWeight: 500 }}>{position || "General"}</Tag>
-      ),
-      filters: Array.from(new Set(templates.map(t => t.position || "General"))).map(p => ({ text: p, value: p })),
-      onFilter: (value: any, record: InterviewTemplate) => (record.position || "General") === value,
-    },
-    {
-      title: "Type",
-      dataIndex: "type",
-      width: 120,
-      render: (type: string) => (
-        <Tag color={TYPE_COLOR[type] ?? "default"} style={{ textTransform: "capitalize" }}>
-          {type}
-        </Tag>
-      ),
-      filters: [
-        { text: "General", value: "general" },
-        { text: "Technical", value: "technical" },
-        { text: "Behavioral", value: "behavioral" },
-        { text: "Situational", value: "situational" },
-      ],
-      onFilter: (value: any, record: InterviewTemplate) => record.type === value,
-    },
-    {
-      title: "Level",
-      dataIndex: "level",
-      width: 120,
-      render: (level: string) => (
-        <Tag color={LEVEL_COLOR[level] ?? "default"} style={{ textTransform: "capitalize" }}>
-          {level}
-        </Tag>
-      ),
-      filters: [
-        { text: "Intern", value: "intern" },
-        { text: "Fresher", value: "fresher" },
-        { text: "Junior", value: "junior" },
-        { text: "Middle", value: "middle" },
-        { text: "Senior", value: "senior" },
-        { text: "Lead", value: "lead" },
-        { text: "Manager", value: "manager" },
-        { text: "Staff", value: "staff" },
-      ],
-      onFilter: (value: any, record: InterviewTemplate) => record.level === value,
     },
     {
       title: "Mode",

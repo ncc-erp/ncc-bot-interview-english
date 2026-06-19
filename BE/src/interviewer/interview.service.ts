@@ -40,7 +40,6 @@ export class EnhancedInterviewerService {
     const systemPrompt = `${template.systemPrompt}
 
 You are starting an interview using the "${template.name}" template.
-Level: ${template.level}
 Number of questions: ${template.numberOfQuestions}
 
 TASK: Generate a warm, professional greeting (2-3 sentences).
@@ -65,6 +64,10 @@ Keep it warm and encouraging.`;
     session: InterviewSession,
     questionNumber: number,
   ): Promise<string> {
+    // FORCE pre-defined question generation (AI generation temporarily disabled/commented out)
+    return this.getPreDefinedQuestion(session, questionNumber);
+
+    /*
     const isLastQuestion = questionNumber === session.template.numberOfQuestions;
 
     if (!session.template.isAiGenerated) {
@@ -124,6 +127,7 @@ Generate question ${questionNumber} now:`;
       this.logger.error('Error generating question:', error);
       throw error;
     }
+    */
   }
 
   async generateOverallFeedback(
@@ -134,6 +138,8 @@ Generate question ${questionNumber} now:`;
     improvements: string[];
     totalScore: number;
   }> {
+    /* 
+    // AI - generated feedback format: 
     if (!session.template.isAiGenerated) {
     return {
       overall: `Thank you for completing the ${session.template.name}. All ${session.template.numberOfQuestions} questions have been answered.`,
@@ -222,6 +228,14 @@ Be specific, encouraging, and reference actual examples from their answers.`;
         totalScore: 7,
       };
     }
+    */
+
+    return {
+      overall: `Thank you for completing the ${session.template.name}. All ${session.template.numberOfQuestions} questions have been answered.`,
+      strengths: [],
+      improvements: [],
+      totalScore: 0,
+    };
   }
 
   private parseFeedbackSections(response: string): {

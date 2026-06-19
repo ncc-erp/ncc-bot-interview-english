@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
-import { InterviewTemplate, InterviewLevel, InterviewType } from '../database-test/entities/interview-template.entity';
+import { Repository } from 'typeorm';
+import { InterviewTemplate } from '../database-test/entities/interview-template.entity';
 
 @Injectable()
 export class TemplateService {
@@ -27,34 +27,13 @@ export class TemplateService {
     return template;
   }
 
-  async findActiveByPositionAndLevel(position: string, level: InterviewLevel): Promise<InterviewTemplate | null> {
-    // Normalize position by trimming
-    const normPosition = position ? position.trim() : 'General';
-
-    // 1. Exact Match: position AND level (case-insensitive)
-    let template = await this.templateRepo.findOne({
-      where: { position: ILike(normPosition), level, isActive: true },
-    });
-    if (template) {
-      this.logger.log(`Template resolution: Exact match found for position="${normPosition}", level="${level}"`);
-      return template;
+  async getDefaultTemplate(): Promise<InterviewTemplate> {
+    let template = await this.templateRepo.findOne({ where: { name: 'General English Interview', isActive: true } });
+    if (!template) {
+      template = await this.templateRepo.findOne({ where: { isActive: true }, order: { id: 'ASC' } });
     }
-
-    // 2. Level Fallback: position = 'General' AND level
-    template = await this.templateRepo.findOne({
-      where: { position: 'General', level, isActive: true },
-    });
-    if (template) {
-      this.logger.log(`Template resolution: Level fallback found for position="General", level="${level}"`);
-      return template;
-    }
-
-    // 3. Global Fallback: position = 'General' AND level = 'staff'
-    template = await this.templateRepo.findOne({
-      where: { position: 'General', level: InterviewLevel.STAFF, isActive: true },
-    });
-    if (template) {
-      this.logger.log(`Template resolution: Global fallback found for position="General", level="staff"`);
+    if (!template) {
+      throw new NotFoundException('No active templates found');
     }
     return template;
   }
@@ -70,9 +49,6 @@ export class TemplateService {
       {
         name: 'HR Interview Simulation',
         description: 'Realistic HR interview with natural conversation flow and topic transitions',
-        type: InterviewType.BEHAVIORAL,
-        level: InterviewLevel.MIDDLE,
-        position: 'General',
         isAiGenerated: true,
         numberOfQuestions: 8,
         systemPrompt: `You are an experienced HR interviewer conducting a realistic job interview.
@@ -125,9 +101,6 @@ DO NOT:
       {
         name: 'Randomized Interview Simulation',
         description: 'Interview with fully independent, randomly varied questions not based on user answers',
-        type: InterviewType.GENERAL,
-        level: InterviewLevel.INTERN,
-        position: 'General',
         isAiGenerated: true,
         numberOfQuestions: 8,
         systemPrompt: `You are an interviewer conducting a RANDOMIZED interview simulation.
@@ -175,9 +148,6 @@ Your job: Ask one completely independent question at a time until all 8 question
       {
         name: 'Non-AI Generate Interview',
         description: 'Pre-defined questions without AI generation - straightforward Q&A format',
-        type: InterviewType.GENERAL,
-        level: InterviewLevel.STAFF,
-        position: 'General',
         isAiGenerated: false,
         numberOfQuestions: 8,
         systemPrompt: `You are conducting a structured interview with pre-defined questions.

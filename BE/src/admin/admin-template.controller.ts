@@ -16,8 +16,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   InterviewTemplate,
-  InterviewLevel,
-  InterviewType,
   QuestionSection,
 } from '@/database-test/entities/interview-template.entity';
 import { AdminAuthGuard } from './admin-auth.guard';
@@ -25,9 +23,6 @@ import { AdminAuthGuard } from './admin-auth.guard';
 export class CreateTemplateDto {
   name: string;
   description: string;
-  type: InterviewType;
-  level: InterviewLevel;
-  position?: string;
   isAiGenerated?: boolean;
   systemPrompt: string;
   sampleQuestions: string[];
@@ -39,9 +34,6 @@ export class CreateTemplateDto {
 export class UpdateTemplateDto {
   name?: string;
   description?: string;
-  type?: InterviewType;
-  level?: InterviewLevel;
-  position?: string;
   isAiGenerated?: boolean;
   systemPrompt?: string;
   sampleQuestions?: string[];
@@ -97,9 +89,6 @@ export class AdminTemplateController {
     const template = this.templateRepo.create({
       name: dto.name.trim(),
       description: dto.description?.trim() ?? '',
-      type: dto.type ?? InterviewType.GENERAL,
-      level: dto.level ?? InterviewLevel.STAFF,
-      position: dto.position?.trim() || 'General',
       isAiGenerated: dto.isAiGenerated ?? true,
       systemPrompt: dto.systemPrompt?.trim() ?? '',
       sampleQuestions: dto.sampleQuestions ?? [],
@@ -127,9 +116,6 @@ export class AdminTemplateController {
     Object.assign(template, {
       ...(dto.name !== undefined && { name: dto.name.trim() }),
       ...(dto.description !== undefined && { description: dto.description.trim() }),
-      ...(dto.type !== undefined && { type: dto.type }),
-      ...(dto.level !== undefined && { level: dto.level }),
-      ...(dto.position !== undefined && { position: dto.position.trim() }),
       ...(dto.isAiGenerated !== undefined && { isAiGenerated: dto.isAiGenerated }),
       ...(dto.systemPrompt !== undefined && { systemPrompt: dto.systemPrompt.trim() }),
       ...(dto.sampleQuestions !== undefined && { sampleQuestions: dto.sampleQuestions }),

@@ -1,23 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
-export enum InterviewLevel {
-  INTERN = 'intern',
-  FRESHER = 'fresher',
-  JUNIOR = 'junior',
-  MIDDLE = 'middle',
-  SENIOR = 'senior',
-  LEAD = 'lead',
-  MANAGER = 'manager',
-  STAFF = 'staff',
-}
-
-export enum InterviewType {
-  GENERAL = 'general',
-  TECHNICAL = 'technical',
-  BEHAVIORAL = 'behavioral',
-  SITUATIONAL = 'situational',
-}
-
 export interface QuestionSection {
   name: string;
   description?: string;
@@ -35,23 +17,6 @@ export class InterviewTemplate {
 
   @Column('text')
   description: string;
-
-  @Column({
-    type: 'enum',
-    enum: InterviewType,
-    default: InterviewType.GENERAL,
-  })
-  type: InterviewType;
-
-  @Column({
-    type: 'enum',
-    enum: InterviewLevel,
-    default: InterviewLevel.STAFF,
-  })
-  level: InterviewLevel;
-
-  @Column({ default: 'General' })
-  position: string;
 
   @Column({ default: true })
   isAiGenerated: boolean;

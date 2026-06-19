@@ -9,9 +9,9 @@ import { MessageRole, MessageType } from '@/database-test/entities/session-messa
 import { SessionMode, SessionStatus } from '@/database-test/entities/interview-session-test.entity';
 import { AxiosClient } from '@/shared/lib/axios-client';
 import { AGENT_ENDPOINTS } from '@/shared/constants/agent';
-import { BotAuthService } from '@/auth/bot-auth.service';
 import { EventSourcePolyfill } from 'event-source-polyfill';
-import { InterviewLevel, InterviewTemplate } from '@/database-test/entities/interview-template.entity';
+import { BotAuthService } from '@/auth/bot-auth.service';
+import { InterviewTemplate } from '@/database-test/entities/interview-template.entity';
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
@@ -324,59 +324,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Parse start command arguments: *start [level] [position]
-      const parts = message.trim().split(/\s+/);
-      const templateIndexOrLevel = parts[1];
-      const positionStr = parts.slice(2).join(' ');
-
-      let selectedTemplate: any = null;
-
-      // Check for legacy index lookup (e.g., *start 2)
-      const templateNumber = templateIndexOrLevel ? parseInt(templateIndexOrLevel, 10) : NaN;
-      if (!isNaN(templateNumber)) {
-        const templates = await this.templateService.getActiveTemplates();
-        if (templateNumber >= 1 && templateNumber <= templates.length) {
-          selectedTemplate = templates[templateNumber - 1];
-        } else {
-          await this.sendChatMessage(
-            roomName,
-            `❌ Invalid template number. Use *templates to see available options.`
-          );
-          return;
-        }
-      } else {
-        // Parse level and position
-        let level = InterviewLevel.STAFF; // default level fallback
-        let position = 'General'; // default position fallback
-
-        if (templateIndexOrLevel) {
-          const lowerArg = templateIndexOrLevel.toLowerCase();
-          const validLevels = Object.values(InterviewLevel);
-
-          if (validLevels.includes(lowerArg as InterviewLevel)) {
-            level = lowerArg as InterviewLevel;
-            if (positionStr) {
-              position = positionStr;
-            }
-          } else {
-            // First argument is not a level enum value, so we treat the entire rest of command as position
-            position = parts.slice(1).join(' ');
-            level = InterviewLevel.STAFF;
-          }
-        }
-
-        // Find template using the fallback chain
-        selectedTemplate = await this.templateService.findActiveByPositionAndLevel(position, level);
-
-        if (!selectedTemplate) {
-          await this.sendChatMessage(
-            roomName,
-            `❌ No active interview template found for position "${position}" and level "${level}".`,
-            true
-          );
-          return;
-        }
-      }
+      const selectedTemplate = await this.templateService.getDefaultTemplate();
       await this.sendChatMessage(roomName, `⏳ Starting interview with template: ${selectedTemplate.name}...`);
 
       const session = await this.sessionService.createSession(
@@ -725,8 +673,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     return val.toLowerCase() !== 'false' && val !== '0';
   }
 
-  private async sendChatMessage(roomName: string, text: string, isSend: boolean = false): Promise<void> {
-    if (!this.isChatEnabled() && !isSend) return;
+  private async sendChatMessage(roomName: string, text: string, isSendNoti: boolean = false): Promise<void> {
+    if (!this.isChatEnabled() && !isSendNoti) return;
 
     try {
       const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
@@ -735,7 +683,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         `${baseUrl}/api/v2/dispatch/agent-request`,
         {
           room_name: roomName,
-          agent_id: agentId || 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+          agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
           payload: {
             request_type: 'send_chat_message',
             message: text,

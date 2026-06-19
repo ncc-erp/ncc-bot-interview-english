@@ -185,9 +185,6 @@ export default function TemplateFormPage({ mode }: Props) {
         form.setFieldsValue({
           name: t.name,
           description: t.description,
-          type: t.type,
-          level: t.level,
-          position: t.position ?? "General",
           isAiGenerated: t.isAiGenerated !== false,
           systemPrompt: t.systemPrompt,
           sampleQuestions: (t.sampleQuestions ?? []).join("\n"),
@@ -233,9 +230,6 @@ export default function TemplateFormPage({ mode }: Props) {
       const payload: TemplateFormData = {
         name: values.name,
         description: values.description ?? "",
-        type: values.type,
-        level: values.level,
-        position: values.position?.trim() || "General",
         isAiGenerated: !!values.isAiGenerated,
         systemPrompt: values.isAiGenerated ? values.systemPrompt : "",
         sampleQuestions,
@@ -286,7 +280,7 @@ export default function TemplateFormPage({ mode }: Props) {
         <Alert type="error" message={error} closable onClose={() => setError(null)} style={{ marginBottom: 16 }} />
       )}
 
-      <Form form={form} layout="vertical" initialValues={{ type: "general", level: "staff", position: "General", isAiGenerated: true, numberOfQuestions: 5, isActive: true }}>
+      <Form form={form} layout="vertical" initialValues={{ isAiGenerated: false, numberOfQuestions: 5, isActive: true }}>
         <Tabs
           items={[
             {
@@ -303,34 +297,19 @@ export default function TemplateFormPage({ mode }: Props) {
                       <InputNumber min={1} max={50} style={{ width: "100%" }} />
                     </Form.Item>
 
-                    <Form.Item label="Type" name="type" rules={[{ required: true }]}>
-                      <Select>
-                        <Option value="general">General</Option>
-                        <Option value="technical">Technical</Option>
-                        <Option value="behavioral">Behavioral</Option>
-                        <Option value="situational">Situational</Option>
-                      </Select>
-                    </Form.Item>
-
-                    <Form.Item label="Level" name="level" rules={[{ required: true }]}>
-                      <Select>
-                        <Option value="intern">Intern</Option>
-                        <Option value="fresher">Fresher</Option>
-                        <Option value="junior">Junior</Option>
-                        <Option value="middle">Middle</Option>
-                        <Option value="senior">Senior</Option>
-                        <Option value="lead">Lead</Option>
-                        <Option value="manager">Manager</Option>
-                        <Option value="staff">Staff</Option>
-                      </Select>
-                    </Form.Item>
-
-                    <Form.Item label="Position" name="position" rules={[{ required: true, message: "Position is required" }]}>
-                      <Input placeholder="e.g. BA, Tester, Developer, Sale, General" />
-                    </Form.Item>
-
-                    <Form.Item label="AI Generated" name="isAiGenerated" valuePropName="checked">
-                      <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                    <Form.Item
+                      label={
+                        <span>
+                          AI Generated
+                          <span style={{ color: "#fa8c16", fontSize: "12px", fontWeight: "normal", marginLeft: "8px" }}>
+                            (Feature updating...)
+                          </span>
+                        </span>
+                      }
+                      name="isAiGenerated"
+                      valuePropName="checked"
+                    >
+                      <Switch checkedChildren="Yes" unCheckedChildren="No" disabled />
                     </Form.Item>
                   </div>
 

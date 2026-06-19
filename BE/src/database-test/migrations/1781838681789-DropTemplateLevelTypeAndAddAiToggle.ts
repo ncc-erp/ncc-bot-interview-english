@@ -8,7 +8,7 @@ export class DropTemplateLevelTypeAndAddAiToggle1781838681789 implements Migrati
         await queryRunner.query(`DROP TYPE "public"."interview_templates_level_enum"`);
         await queryRunner.query(`ALTER TABLE "interview_templates" DROP COLUMN "type"`);
         await queryRunner.query(`DROP TYPE "public"."interview_templates_type_enum"`);
-        await queryRunner.query(`ALTER TABLE "interview_templates" ADD "isAiGenerated" boolean NOT NULL DEFAULT true`);
+        await queryRunner.query(`ALTER TABLE "interview_templates" ADD "isAiGenerated" boolean NOT NULL DEFAULT false`);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

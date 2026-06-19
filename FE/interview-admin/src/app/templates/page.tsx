@@ -67,7 +67,7 @@ export default function TemplateListPage() {
       width: 120,
       align: "center" as const,
       render: (isAiGenerated: boolean) => (
-        <Tag color={isAiGenerated !== false ? "purple" : "default"}>
+        <Tag color={isAiGenerated !== false ? "purple" : "orange"}>
           {isAiGenerated !== false ? "AI Generated" : "Predefined"}
         </Tag>
       ),

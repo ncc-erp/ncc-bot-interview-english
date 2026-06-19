@@ -727,46 +727,46 @@ Type your answer or speak in the voice room...`;
    * Invite agent to external meeting room.
    * Used by OrchestratorSSEService — no Nezon.Client available.
    */
-  // async handleInviteAgentExternal(roomName: string, sessionId: string): Promise<void> {
-  //   const account: Account = {
-  //     appid: this.configService.get<string>('MEZON_BOT_ID')!,
-  //     token: this.configService.get<string>('MEZON_TOKEN')!,
-  //   };
+  async handleInviteAgentExternal(roomName: string, sessionId: string): Promise<void> {
+    const account: Account = {
+      appid: this.configService.get<string>('MEZON_BOT_ID')!,
+      token: this.configService.get<string>('MEZON_TOKEN')!,
+    };
 
-  //   const payload = {
-  //     account,
-  //     room_name: roomName,
-  //     type: 'interview',
-  //     metadata: { interview_id: sessionId },
-  //   };
+    const payload = {
+      account,
+      room_name: roomName,
+      type: 'interview',
+      metadata: { interview_id: sessionId },
+    };
 
-  //   this.logger.log(`[External] Inviting agent to room ${roomName}...`);
-  //   try {
-  //     const response = await this.axiosClient.getInstance().post(AGENT_ENDPOINTS.CREATE_DISPATCH, payload);
-  //     this.logger.log(`[External] Agent invited: ${JSON.stringify(response.data)}`);
+    this.logger.log(`[External] Inviting agent to room ${roomName}...`);
+    try {
+      const response = await this.axiosClient.getInstance().post(AGENT_ENDPOINTS.CREATE_DISPATCH, payload);
+      this.logger.log(`[External] Agent invited: ${JSON.stringify(response.data)}`);
 
-  //     const agentId = response.data?.agent_name;
-  //     if (agentId) {
-  //       this.roomAgents.set(roomName, agentId);
-  //       this.logger.log(`[External] Stored agent_id ${agentId} for room ${roomName}`);
-  //     }
-  //   } catch (error) {
-  //     this.logger.error(`[External] Failed to invite agent:`, error);
-  //     throw error;
-  //   }
+      const agentId = response.data?.agent_name;
+      if (agentId) {
+        this.roomAgents.set(roomName, agentId);
+        this.logger.log(`[External] Stored agent_id ${agentId} for room ${roomName}`);
+      }
+    } catch (error) {
+      this.logger.error(`[External] Failed to invite agent:`, error);
+      throw error;
+    }
 
-  //   this.roomSessions.set(roomName, sessionId);
+    this.roomSessions.set(roomName, sessionId);
 
-  //   this.logger.log(`[External] Waiting 2s for agent to join room ${roomName}...`);
-  //   await new Promise(resolve => setTimeout(resolve, 2000));
+    this.logger.log(`[External] Waiting 2s for agent to join room ${roomName}...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-  //   try {
-  //     await this.enableTranscript(roomName);
-  //     this.logger.log(`[External] ✅ Transcript enabled for room ${roomName}`);
-  //   } catch (error) {
-  //     this.logger.error(`[External] Failed to enable transcript:`, error);
-  //   }
-  // }
+    try {
+      await this.enableTranscript(roomName);
+      this.logger.log(`[External] ✅ Transcript enabled for room ${roomName}`);
+    } catch (error) {
+      this.logger.error(`[External] Failed to enable transcript:`, error);
+    }
+  }
 
   /**
    * Remove agent from external meeting room.

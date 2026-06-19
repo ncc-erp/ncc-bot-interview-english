@@ -18,7 +18,7 @@ export class InterviewTemplate {
   @Column('text')
   description: string;
 
-  @Column({ default: true })
+  @Column({ default: false })
   isAiGenerated: boolean;
 
   @Column('text')

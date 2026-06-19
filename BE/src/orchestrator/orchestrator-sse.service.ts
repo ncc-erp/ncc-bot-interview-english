@@ -48,6 +48,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private readonly SILENCE_TIMEOUT_MS = 15_000;
 
   private readonly roomIds = new Map<string, string>();
+  private readonly awaitingTemplateSelection = new Map<string, { identity: string; timestamp: number }>();
   private authToken: string;
 
   constructor(
@@ -256,6 +257,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.handleStopCommand(roomName, identity);
     } else if (message === '*end') {
       this.handleEndCommand(roomName, identity);
+    } else {
+      this.handleNumberSelection(roomName, identity, message);
     }
   }
 
@@ -267,19 +270,13 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     try {
       const templates = await this.templateService.getActiveTemplates();
       if (!templates.length) {
-        await this.sendChatMessage(roomName, '❌ No templates available.');
+        await this.sendChatMessage(roomName, '❌ No templates available.', true);
         return;
       }
 
-      const lines = [
-        '📋 Available Interview Templates:',
-        ...templates.map((t, i) =>
-          `${i + 1}. ${t.name} (${t.numberOfQuestions} questions)`
-        ),
-        'Type *start <number> to begin. Example: *start 1',
-      ];
-
-      await this.sendChatMessage(roomName, lines.join('\n'));
+      const templatesList = templates.map((t, i) => `[${i + 1}] ${t.name}`).join('  -  ');
+      await this.sendChatMessage(roomName, `📋 Templates: ${templatesList}`, true);
+      await this.sendChatMessage(roomName, '👉 Type *start<number> to begin (e.g., *start1).', true);
     } catch (error) {
       this.logger.error('Error in handleTemplatesCommand:', error);
     }
@@ -287,79 +284,160 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
   private async handleStartCommand(roomName: string, participantIdentity: string, message: string): Promise<void> {
     try {
-      this.logger.log(`🚀 *start from ${participantIdentity} in room ${roomName}`);
+      this.logger.log(`🚀 *start from ${participantIdentity} in room ${roomName} (msg: "${message}")`);
 
-      // Check if already active room
-      const roomId = this.roomIds.get(roomName);
-      if (!roomId) {
+      const templates = await this.templateService.getActiveTemplates();
+      if (!templates.length) {
+        await this.sendChatMessage(roomName, '❌ No templates available.', true);
+        return;
+      }
+
+      const args = message.replace('*start', '').trim();
+      if (!args) {
+        // Set awaiting template selection state
+        this.awaitingTemplateSelection.set(roomName, {
+          identity: participantIdentity,
+          timestamp: Date.now(),
+        });
+
+        const templatesList = templates.map((t, i) => `[${i + 1}] ${t.name}`).join('  -  ');
+        await this.sendChatMessage(roomName, `📋 Templates: ${templatesList}`, true);
+        await this.sendChatMessage(roomName, '👉 Reply with the number to select (e.g., 1 or 2).', true);
+        return;
+      }
+
+      const index = parseInt(args, 10);
+      if (isNaN(index) || index < 1 || index > templates.length) {
         await this.sendChatMessage(
           roomName,
-          '⏳ Room metadata is not ready yet. Please try *start again in a moment.'
+          `❌ Invalid template number. Please choose a number from 1 to ${templates.length}. Example: *start1`,
+          true
         );
         return;
       }
 
-      const participants = await this.getRoomParticipants(roomId);
-      const starterParticipant = participants.find((participant) =>
-        this.isMatchingParticipant(participant, participantIdentity),
-      );
-      const isStarterInRoom = !!starterParticipant;
+      // Clear any pending selection since user started directly
+      this.awaitingTemplateSelection.delete(roomName);
 
-      if (!isStarterInRoom) {
-        this.logger.warn(
-          `[Start] Participant ${participantIdentity} not found in room ${roomName} (${roomId})`
-        );
-        await this.sendChatMessage(
-          roomName,
-          '❌ Could not verify that you are in this room. Please rejoin the room and try again.'
-        );
-        return;
-      }
-      const starterDisplayName = this.getParticipantDisplayName(starterParticipant, participantIdentity);
-
-      // Check if already active session for this room
-      const existing = await this.sessionService.getSessionByRoomName(roomName);
-      if (existing && (existing.status === 'in_progress' || existing.status === 'pending')) {
-        await this.sendChatMessage(roomName, '⚠️ An interview session is already active in this room.');
-        return;
-      }
-
-      const selectedTemplate = await this.templateService.getDefaultTemplate();
-      await this.sendChatMessage(roomName, `⏳ Starting interview with template: ${selectedTemplate.name}...`);
-
-      const session = await this.sessionService.createSession(
-        participantIdentity,
-        starterDisplayName,
-        roomName,
-        roomName,
-        selectedTemplate.id,
-        SessionMode.VOICE,
-        true,
-        roomId,
-      );
-
-      // Map room → session in memory
-      this.roomSessionMap.set(roomName, session.id);
-
-      await this.sessionService.startSession(session.id);
-      this.logger.log(`✅ Session ${session.id} created for room ${roomName}`);
-
-      // Invite agent first to avoid long AI greeting delays before bot joins room
-      await this.agentService.handleInviteAgentExternal(roomName, session.id);
-      // Subscribe transcript SSE for this room
-      this.subscribeTranscript(roomName, session.id);
-
-      const greeting = await this.generateGreetingWithTimeout(selectedTemplate);
-
-      await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, greeting, MessageType.TEXT);
-
-      await this.agentService.sendTTS(roomName, greeting);
-      await this.sendChatMessage(roomName, `🤖 ${greeting}`);
-      this.logger.log(`✅ Interview started in room ${roomName}`);
+      const selectedTemplate = templates[index - 1];
+      await this.startInterviewWithTemplate(roomName, participantIdentity, selectedTemplate);
     } catch (error: any) {
       this.logger.error(`Error in handleStartCommand:`, error);
       await this.sendChatMessage(roomName, `❌ Failed to start interview: ${error.message}`);
     }
+  }
+
+  private async handleNumberSelection(roomName: string, participantIdentity: string, message: string): Promise<void> {
+    try {
+      const pending = this.awaitingTemplateSelection.get(roomName);
+      if (!pending || pending.identity !== participantIdentity) {
+        return; // Not awaiting selection, or not from this user
+      }
+
+      // Expire selection request after 2 minutes
+      const elapsed = Date.now() - pending.timestamp;
+      if (elapsed > 120_000) {
+        this.awaitingTemplateSelection.delete(roomName);
+        return;
+      }
+
+      const index = parseInt(message.trim(), 10);
+      if (isNaN(index)) {
+        return; // Ignore non-numeric chat messages
+      }
+
+      const templates = await this.templateService.getActiveTemplates();
+      if (index < 1 || index > templates.length) {
+        await this.sendChatMessage(
+          roomName,
+          `❌ Invalid template number. Please choose a number from 1 to ${templates.length}.`,
+          true
+        );
+        return;
+      }
+
+      // Valid number! Clear the pending selection state
+      this.awaitingTemplateSelection.delete(roomName);
+
+      const selectedTemplate = templates[index - 1];
+      await this.startInterviewWithTemplate(roomName, participantIdentity, selectedTemplate);
+    } catch (error: any) {
+      this.logger.error(`Error in handleNumberSelection:`, error);
+      await this.sendChatMessage(roomName, `❌ Failed to select template: ${error.message}`);
+    }
+  }
+
+  private async startInterviewWithTemplate(
+    roomName: string,
+    participantIdentity: string,
+    selectedTemplate: InterviewTemplate,
+  ): Promise<void> {
+    // Check if already active room
+    const roomId = this.roomIds.get(roomName);
+    if (!roomId) {
+      await this.sendChatMessage(
+        roomName,
+        '⏳ Room metadata is not ready yet. Please try *start again in a moment.'
+      );
+      return;
+    }
+
+    const participants = await this.getRoomParticipants(roomId);
+    const starterParticipant = participants.find((participant) =>
+      this.isMatchingParticipant(participant, participantIdentity),
+    );
+    const isStarterInRoom = !!starterParticipant;
+
+    if (!isStarterInRoom) {
+      this.logger.warn(
+        `[Start] Participant ${participantIdentity} not found in room ${roomName} (${roomId})`
+      );
+      await this.sendChatMessage(
+        roomName,
+        '❌ Could not verify that you are in this room. Please rejoin the room and try again.'
+      );
+      return;
+    }
+    const starterDisplayName = this.getParticipantDisplayName(starterParticipant, participantIdentity);
+
+    // Check if already active session for this room
+    const existing = await this.sessionService.getSessionByRoomName(roomName);
+    if (existing && (existing.status === 'in_progress' || existing.status === 'pending')) {
+      await this.sendChatMessage(roomName, '⚠️ An interview session is already active in this room.');
+      return;
+    }
+
+    await this.sendChatMessage(roomName, `⏳ Starting interview with template: ${selectedTemplate.name}...`);
+
+    const session = await this.sessionService.createSession(
+      participantIdentity,
+      starterDisplayName,
+      roomName,
+      roomName,
+      selectedTemplate.id,
+      SessionMode.VOICE,
+      true,
+      roomId,
+    );
+
+    // Map room → session in memory
+    this.roomSessionMap.set(roomName, session.id);
+
+    await this.sessionService.startSession(session.id);
+    this.logger.log(`✅ Session ${session.id} created for room ${roomName}`);
+
+    // Invite agent first to avoid long AI greeting delays before bot joins room
+    await this.agentService.handleInviteAgentExternal(roomName, session.id);
+    // Subscribe transcript SSE for this room
+    this.subscribeTranscript(roomName, session.id);
+
+    const greeting = await this.generateGreetingWithTimeout(selectedTemplate);
+
+    await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, greeting, MessageType.TEXT);
+
+    await this.agentService.sendTTS(roomName, greeting);
+    await this.sendChatMessage(roomName, `🤖 ${greeting}`);
+    this.logger.log(`✅ Interview started in room ${roomName}`);
   }
 
   private async generateGreetingWithTimeout(template: InterviewTemplate): Promise<string> {

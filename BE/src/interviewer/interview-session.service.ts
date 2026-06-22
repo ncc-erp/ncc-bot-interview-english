@@ -38,7 +38,7 @@ export class InterviewSessionService {
     username: string,
     channelId: string,
     roomName: string,
-    templateId: string,
+    templateId: string | null,
     mode: SessionMode = SessionMode.TEXT,
     isExternal = false,
     roomId: string = null,
@@ -47,7 +47,13 @@ export class InterviewSessionService {
     const user = await this.userService.findOrCreateUser(mezonUserId, username);
 
     // Get template with full info
-    const template = await this.templateService.getTemplateById(templateId);
+    let template;
+    if (templateId) {
+      template = await this.templateService.getTemplateById(templateId);
+    } else {
+      // Default fallback if neither is provided
+      template = await this.templateService.getDefaultTemplate();
+    }
 
     // Check for active session
     const existingSession = await this.getActiveSession(user.id, channelId);
@@ -89,7 +95,7 @@ export class InterviewSessionService {
       userId: user.mezonUserId,
       channelId,
       roomName,
-      templateId,
+      templateId: template.id,
       template, // Include template relation
       mode,
       status: SessionStatus.PENDING,

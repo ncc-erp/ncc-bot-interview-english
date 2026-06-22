@@ -40,7 +40,7 @@ export interface SessionListItemDto {
   durationSeconds: number | null;
   roomName: string | null;
   user: { id: string; username: string; mezonUserId: string } | null;
-  template: { id: string; name: string; type: string; level: string; numberOfQuestions: number } | null;
+  template: { id: string; name: string; numberOfQuestions: number } | null;
   overallFeedback: { totalScore: number; star?: number; hrStar?: number } | null;
 }
 
@@ -137,8 +137,6 @@ export class AdminController {
         ? {
           id: s.template.id,
           name: s.template.name,
-          type: s.template.type,
-          level: s.template.level,
           numberOfQuestions: s.template.numberOfQuestions,
         }
         : null,

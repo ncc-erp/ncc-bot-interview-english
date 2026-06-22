@@ -16,8 +16,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   InterviewTemplate,
-  InterviewLevel,
-  InterviewType,
   QuestionSection,
 } from '@/database-test/entities/interview-template.entity';
 import { AdminAuthGuard } from './admin-auth.guard';
@@ -25,8 +23,7 @@ import { AdminAuthGuard } from './admin-auth.guard';
 export class CreateTemplateDto {
   name: string;
   description: string;
-  type: InterviewType;
-  level: InterviewLevel;
+  isAiGenerated?: boolean;
   systemPrompt: string;
   sampleQuestions: string[];
   numberOfQuestions: number;
@@ -37,8 +34,7 @@ export class CreateTemplateDto {
 export class UpdateTemplateDto {
   name?: string;
   description?: string;
-  type?: InterviewType;
-  level?: InterviewLevel;
+  isAiGenerated?: boolean;
   systemPrompt?: string;
   sampleQuestions?: string[];
   numberOfQuestions?: number;
@@ -86,14 +82,15 @@ export class AdminTemplateController {
   @HttpCode(HttpStatus.CREATED)
   async createTemplate(@Body() dto: CreateTemplateDto): Promise<InterviewTemplate> {
     if (!dto.name?.trim()) throw new BadRequestException('Name is required');
-    if (!dto.systemPrompt?.trim()) throw new BadRequestException('System prompt is required');
+    if (dto.isAiGenerated === false && !dto.questionSections?.length && !dto.sampleQuestions?.length) {
+      throw new BadRequestException('Non-AI template must have questions');
+    }
 
     const template = this.templateRepo.create({
       name: dto.name.trim(),
       description: dto.description?.trim() ?? '',
-      type: dto.type ?? InterviewType.GENERAL,
-      level: dto.level ?? InterviewLevel.INTERMEDIATE,
-      systemPrompt: dto.systemPrompt.trim(),
+      isAiGenerated: dto.isAiGenerated ?? true,
+      systemPrompt: dto.systemPrompt?.trim() ?? '',
       sampleQuestions: dto.sampleQuestions ?? [],
       numberOfQuestions: dto.numberOfQuestions ?? 5,
       questionSections: dto.questionSections ?? null,
@@ -119,8 +116,7 @@ export class AdminTemplateController {
     Object.assign(template, {
       ...(dto.name !== undefined && { name: dto.name.trim() }),
       ...(dto.description !== undefined && { description: dto.description.trim() }),
-      ...(dto.type !== undefined && { type: dto.type }),
-      ...(dto.level !== undefined && { level: dto.level }),
+      ...(dto.isAiGenerated !== undefined && { isAiGenerated: dto.isAiGenerated }),
       ...(dto.systemPrompt !== undefined && { systemPrompt: dto.systemPrompt.trim() }),
       ...(dto.sampleQuestions !== undefined && { sampleQuestions: dto.sampleQuestions }),
       ...(dto.numberOfQuestions !== undefined && { numberOfQuestions: dto.numberOfQuestions }),

@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { InterviewTemplate, InterviewLevel, InterviewType } from '../database-test/entities/interview-template.entity';
+import { InterviewTemplate } from '../database-test/entities/interview-template.entity';
 
 @Injectable()
 export class TemplateService {
@@ -27,6 +27,17 @@ export class TemplateService {
     return template;
   }
 
+  async getDefaultTemplate(): Promise<InterviewTemplate> {
+    let template = await this.templateRepo.findOne({ where: { name: 'Developer Interview', isActive: true } });
+    if (!template) {
+      template = await this.templateRepo.findOne({ where: { isActive: true }, order: { id: 'ASC' } });
+    }
+    if (!template) {
+      throw new NotFoundException('No active templates found');
+    }
+    return template;
+  }
+
   async seedDefaultTemplates(): Promise<void> {
     const existingCount = await this.templateRepo.count();
     if (existingCount > 0) {
@@ -38,8 +49,7 @@ export class TemplateService {
       {
         name: 'HR Interview Simulation',
         description: 'Realistic HR interview with natural conversation flow and topic transitions',
-        type: InterviewType.BEHAVIORAL,
-        level: InterviewLevel.INTERMEDIATE,
+        isAiGenerated: true,
         numberOfQuestions: 8,
         systemPrompt: `You are an experienced HR interviewer conducting a realistic job interview.
 
@@ -91,8 +101,7 @@ DO NOT:
       {
         name: 'Randomized Interview Simulation',
         description: 'Interview with fully independent, randomly varied questions not based on user answers',
-        type: InterviewType.GENERAL,
-        level: InterviewLevel.BEGINNER,
+        isAiGenerated: true,
         numberOfQuestions: 8,
         systemPrompt: `You are an interviewer conducting a RANDOMIZED interview simulation.
 
@@ -139,8 +148,7 @@ Your job: Ask one completely independent question at a time until all 8 question
       {
         name: 'Non-AI Generate Interview',
         description: 'Pre-defined questions without AI generation - straightforward Q&A format',
-        type: InterviewType.GENERAL,
-        level: InterviewLevel.INTERMEDIATE,
+        isAiGenerated: false,
         numberOfQuestions: 8,
         systemPrompt: `You are conducting a structured interview with pre-defined questions.
 

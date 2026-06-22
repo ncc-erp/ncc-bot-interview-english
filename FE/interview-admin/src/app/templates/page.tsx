@@ -14,19 +14,6 @@ import {
   type InterviewTemplate,
 } from "@/services/templateService";
 
-const LEVEL_COLOR: Record<string, string> = {
-  beginner:     "blue",
-  intermediate: "purple",
-  advanced:     "orange",
-};
-
-const TYPE_COLOR: Record<string, string> = {
-  general:     "default",
-  technical:   "cyan",
-  behavioral:  "green",
-  situational: "volcano",
-};
-
 export default function TemplateListPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<InterviewTemplate[]>([]);
@@ -75,24 +62,20 @@ export default function TemplateListPage() {
       ),
     },
     {
-      title: "Type",
-      dataIndex: "type",
+      title: "Mode",
+      dataIndex: "isAiGenerated",
       width: 120,
-      render: (type: string) => (
-        <Tag color={TYPE_COLOR[type] ?? "default"} style={{ textTransform: "capitalize" }}>
-          {type}
+      align: "center" as const,
+      render: (isAiGenerated: boolean) => (
+        <Tag color={isAiGenerated !== false ? "purple" : "orange"}>
+          {isAiGenerated !== false ? "AI Generated" : "Predefined"}
         </Tag>
       ),
-    },
-    {
-      title: "Level",
-      dataIndex: "level",
-      width: 120,
-      render: (level: string) => (
-        <Tag color={LEVEL_COLOR[level] ?? "default"} style={{ textTransform: "capitalize" }}>
-          {level}
-        </Tag>
-      ),
+      filters: [
+        { text: "AI Generated", value: true },
+        { text: "Predefined", value: false },
+      ],
+      onFilter: (value: any, record: InterviewTemplate) => (record.isAiGenerated !== false) === value,
     },
     {
       title: "Questions",

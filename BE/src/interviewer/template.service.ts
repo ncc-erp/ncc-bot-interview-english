@@ -28,7 +28,7 @@ export class TemplateService {
   }
 
   async getDefaultTemplate(): Promise<InterviewTemplate> {
-    let template = await this.templateRepo.findOne({ where: { name: 'General English Interview', isActive: true } });
+    let template = await this.templateRepo.findOne({ where: { name: 'Developer Interview', isActive: true } });
     if (!template) {
       template = await this.templateRepo.findOne({ where: { isActive: true }, order: { id: 'ASC' } });
     }

@@ -16,7 +16,6 @@ import { InterviewTemplate } from '@/database-test/entities/interview-template.e
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OrchestratorSSEService.name);
-  private readonly GREETING_TIMEOUT_MS = 12000;
 
   // Global SSE connections (started once on boot)
   private metadataSSE: EventSourcePolyfill | null = null;
@@ -49,6 +48,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
   private readonly roomIds = new Map<string, string>();
   private readonly awaitingTemplateSelection = new Map<string, { identity: string; timestamp: number }>();
+  private readonly templateSelectionTimers = new Map<string, NodeJS.Timeout>();
   private authToken: string;
 
   constructor(
@@ -77,6 +77,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     for (const es of this.transcriptSSEs.values()) es.close();
     if (this.metadataRetryTimer) clearTimeout(this.metadataRetryTimer);
     if (this.chatRetryTimer) clearTimeout(this.chatRetryTimer);
+    for (const timer of this.templateSelectionTimers.values()) clearTimeout(timer);
+    this.templateSelectionTimers.clear();
   }
 
   // ─────────────────────────────────────────────
@@ -180,6 +182,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
     this.pendingTranscripts.delete(roomName);
     this.clearSilenceTimer(roomName);
+    this.clearTemplateSelectionTimer(roomName);
+    this.awaitingTemplateSelection.delete(roomName);
     this.roomSessionMap.delete(roomName);
     this.roomIds.delete(roomName);
     //update room status 
@@ -299,6 +303,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
           identity: participantIdentity,
           timestamp: Date.now(),
         });
+        this.startTemplateSelectionTimer(roomName, participantIdentity);
 
         const templatesList = templates.map((t, i) => `[${i + 1}] ${t.name}`).join('  -  ');
         await this.sendChatMessage(roomName, `📋 Templates: ${templatesList}`, true);
@@ -318,6 +323,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       // Clear any pending selection since user started directly
       this.awaitingTemplateSelection.delete(roomName);
+      this.clearTemplateSelectionTimer(roomName);
 
       const selectedTemplate = templates[index - 1];
       await this.startInterviewWithTemplate(roomName, participantIdentity, selectedTemplate);
@@ -332,13 +338,6 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const pending = this.awaitingTemplateSelection.get(roomName);
       if (!pending || pending.identity !== participantIdentity) {
         return; // Not awaiting selection, or not from this user
-      }
-
-      // Expire selection request after 2 minutes
-      const elapsed = Date.now() - pending.timestamp;
-      if (elapsed > 120_000) {
-        this.awaitingTemplateSelection.delete(roomName);
-        return;
       }
 
       const index = parseInt(message.trim(), 10);
@@ -358,6 +357,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       // Valid number! Clear the pending selection state
       this.awaitingTemplateSelection.delete(roomName);
+      this.clearTemplateSelectionTimer(roomName);
 
       const selectedTemplate = templates[index - 1];
       await this.startInterviewWithTemplate(roomName, participantIdentity, selectedTemplate);
@@ -431,7 +431,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     // Subscribe transcript SSE for this room
     this.subscribeTranscript(roomName, session.id);
 
-    const greeting = await this.generateGreetingWithTimeout(selectedTemplate);
+    // Generate and send greeting
+    const greeting = await this.interviewerService.generateGreeting(selectedTemplate);
 
     await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, greeting, MessageType.TEXT);
 
@@ -440,24 +441,6 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`✅ Interview started in room ${roomName}`);
   }
 
-  private async generateGreetingWithTimeout(template: InterviewTemplate): Promise<string> {
-    const fallbackGreeting = `Hello! Welcome to the interview. I'll be asking you ${template.numberOfQuestions} questions. Please answer each question clearly and take your time. When you're ready, open your micro and say "ready" to begin.`;
-
-    try {
-      return await Promise.race([
-        this.interviewerService.generateGreeting(template),
-        new Promise<string>((resolve) =>
-          setTimeout(() => resolve(fallbackGreeting), this.GREETING_TIMEOUT_MS),
-        ),
-      ]);
-    } catch (error) {
-      this.logger.warn(
-        `[Start] Failed to generate AI greeting for template ${template?.name}, using fallback.`,
-        (error as Error)?.message,
-      );
-      return fallbackGreeting;
-    }
-  }
 
   private async handleStopCommand(roomName: string, participantIdentity: string): Promise<void> {
     try {
@@ -746,6 +729,36 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private startTemplateSelectionTimer(roomName: string, participantIdentity: string): void {
+    this.clearTemplateSelectionTimer(roomName);
+
+    const timer = setTimeout(async () => {
+      this.templateSelectionTimers.delete(roomName);
+      const pending = this.awaitingTemplateSelection.get(roomName);
+      if (pending && pending.identity === participantIdentity) {
+        this.awaitingTemplateSelection.delete(roomName);
+        this.logger.warn(`[Template Selection] Timeout in room ${roomName} for ${participantIdentity}`);
+        await this.sendChatMessage(
+          roomName,
+          '⚠️ Template selection timed out. Please type *start again to show the list of templates.',
+          true,
+        );
+      }
+    }, 120_000); // 2 minutes
+
+    this.templateSelectionTimers.set(roomName, timer);
+    this.logger.log(`[Template Selection] Started 2m timer for room ${roomName}`);
+  }
+
+  private clearTemplateSelectionTimer(roomName: string): void {
+    const timer = this.templateSelectionTimers.get(roomName);
+    if (timer) {
+      clearTimeout(timer);
+      this.templateSelectionTimers.delete(roomName);
+      this.logger.log(`[Template Selection] Cleared timer for room ${roomName}`);
+    }
+  }
+
   private isChatEnabled(): boolean {
     const val = this.configService.get<string>('SHOW_ROOM_CHAT', 'true');
     return val.toLowerCase() !== 'false' && val !== '0';
@@ -820,6 +833,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.answerDebounceTimers.delete(roomName);
     this.pendingTranscripts.delete(roomName);
     this.clearSilenceTimer(roomName);
+    this.clearTemplateSelectionTimer(roomName);
+    this.awaitingTemplateSelection.delete(roomName);
     this.roomSessionMap.delete(roomName);
     this.roomIds.delete(roomName);
   }

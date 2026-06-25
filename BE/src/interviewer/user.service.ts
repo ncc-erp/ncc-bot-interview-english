@@ -29,6 +29,10 @@ export class UserService {
       });
       await this.userRepo.save(user);
       this.logger.log(`Created new user: ${username} (${mezonUserId})`);
+    } else if (username && username !== 'Candidate' && user.username !== username) {
+      user.username = username;
+      await this.userRepo.save(user);
+      this.logger.log(`Updated username for ${mezonUserId} to: ${username}`);
     }
 
     return user;

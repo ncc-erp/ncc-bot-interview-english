@@ -68,13 +68,13 @@ export class DatabaseTestModule implements OnModuleInit {
     // Seed default admin credentials
     const existingAdmin = await this.adminRepo.findOne({ where: { username: 'admin' } });
     if (!existingAdmin) {
-      const passwordHash = crypto.createHash('sha256').update('123qwe').digest('hex');
+      const passwordHash = crypto.createHash('sha256').update('P@s5w0rd!').digest('hex');
       await this.adminRepo.save({
         id: crypto.randomUUID(),
         username: 'admin',
         passwordHash,
       });
-      console.log('🌱 Seeded default admin user: admin / 123qwe (SHA-256 encrypted)');
+      console.log('🌱 Seeded default admin user: admin / P@s5w0rd! (SHA-256 encrypted)');
     }
   }
 }

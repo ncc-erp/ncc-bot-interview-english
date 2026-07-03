@@ -183,3 +183,17 @@ export const logout = async (): Promise<{ success: boolean }> => {
     method: "POST",
   });
 };
+
+export const getAdminProfile = async (): Promise<{ id: string; username: string; createdAt: string }> => {
+  return apiFetch("/admin/auth/profile");
+};
+
+export const changeAdminPassword = async (
+  data: Record<string, any>
+): Promise<{ success: boolean; message: string }> => {
+  return apiFetch("/admin/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+};

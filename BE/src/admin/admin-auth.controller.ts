@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UnauthorizedException, UseGuards, Req, Res } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, UnauthorizedException, UseGuards, Req, Res, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Response, Request } from 'express';
@@ -125,5 +125,69 @@ export class AdminAuthController {
     }
 
     return { success: true };
+  }
+
+  @Get('profile')
+  @UseGuards(AdminAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getProfile(
+    @Req() req: any,
+  ) {
+    const admin = await this.adminRepo.findOne({
+      where: { id: req.admin.id },
+    });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+    return {
+      id: admin.id,
+      username: admin.username,
+      createdAt: admin.createdAt,
+    };
+  }
+
+  @Post('change-password')
+  @UseGuards(AdminAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @Req() req: any,
+    @Body() body: Record<string, any>,
+  ) {
+    const { oldPassword, newPassword } = body;
+    if (!oldPassword || !newPassword) {
+      throw new BadRequestException('Old password and new password are required');
+    }
+
+    // Password complexity check
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      throw new BadRequestException(
+        'Password must be at least 8 characters long, and contain at least one uppercase letter, one number, and one special character.',
+      );
+    }
+
+    const admin = await this.adminRepo.findOne({
+      where: { id: req.admin.id },
+    });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    const oldPasswordHash = crypto.createHash('sha256').update(oldPassword).digest('hex');
+    if (admin.passwordHash !== oldPasswordHash) {
+      throw new BadRequestException('Incorrect old password');
+    }
+
+    admin.passwordHash = crypto.createHash('sha256').update(newPassword).digest('hex');
+    // Clear refresh tokens to force re-login across devices
+    admin.refreshToken = null;
+    admin.refreshTokenExpiresAt = null;
+
+    await this.adminRepo.save(admin);
+
+    return {
+      success: true,
+      message: 'Password changed successfully',
+    };
   }
 }

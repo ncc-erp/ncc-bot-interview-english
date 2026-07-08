@@ -1,6 +1,6 @@
 export const AGENT_ENDPOINTS = {
-  CANCEL_DISPATCH: "/api/cancel_dispatch",
-  CREATE_DISPATCH: "/api/create_dispatch",
+  CANCEL_DISPATCH: "/api/v2/cancel_dispatch",
+  CREATE_DISPATCH: "/api/v2/create_dispatch",
   TTS_SPEAK: "/api/tts/speak",
   STREAM_MESSAGE: "/api/v2/sse/stream_transcript",
   AGENT_CONTROL_TRANSCRIPT: "/api/agent-control/transcript",

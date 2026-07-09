@@ -205,7 +205,7 @@ export class InterviewSessionService {
   async getSessionById(sessionId: string): Promise<InterviewSession | null> {
     return this.sessionRepo.findOne({
       where: { id: sessionId },
-      relations: ['template'],
+      relations: ['template', 'messages'],
     });
   }
 
@@ -219,7 +219,7 @@ export class InterviewSessionService {
         channelId,
         status: SessionStatus.IN_PROGRESS,
       },
-      relations: ['template', 'user'],
+      relations: ['template', 'user', 'messages'],
     });
   }
 
@@ -413,7 +413,7 @@ export class InterviewSessionService {
         roomName,
         status: In([SessionStatus.IN_PROGRESS, SessionStatus.COMPLETED, SessionStatus.PENDING]),
       },
-      relations: ['template'],
+      relations: ['template', 'messages'],
       order: {
         startedAt: 'DESC', // Get most recent session
       },

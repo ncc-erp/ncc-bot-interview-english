@@ -438,6 +438,45 @@ export class AgentService {
         return;
       }
 
+      if (this.isRepeatRequest(fullText)) {
+        this.logger.log(`[Repeat] Detected repeat request from voice in clan room ${roomName}: "${fullText}"`);
+
+        // Show in text channel
+        const channel = client.channels.get(session.channelId);
+        if (channel) {
+          await channel.send({ t: `🎤 **Your request:** ${fullText}` });
+        }
+
+        let repeatText = '';
+        if (session.currentQuestionIndex === 0) {
+          const lastAssistantMessage = session.messages
+            ?.filter((m: any) => m.role === MessageRole.ASSISTANT)
+            ?.at(-1)?.content;
+          repeatText = lastAssistantMessage || await this.interviewer.generateGreeting(session.template);
+
+          await this.sendTTS(roomName, repeatText);
+          if (channel) {
+            await channel.send({ t: `🤖 **Greeting:**\n\n${repeatText}` });
+          }
+        } else {
+          const currentQuestion = session.messages
+            ?.filter((m: any) =>
+              m.role === MessageRole.ASSISTANT &&
+              m.questionNumber === session.currentQuestionIndex
+            )
+            ?.at(-1)?.content;
+          repeatText = currentQuestion || await this.interviewer.generateQuestion(session, session.currentQuestionIndex);
+
+          await this.sendTTS(roomName, repeatText);
+          if (channel) {
+            await channel.send({
+              t: `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n\n${repeatText}`
+            });
+          }
+        }
+        return;
+      }
+
       const userMessages = session.messages?.filter((m: any) => m.role === MessageRole.USER) || [];
       const isFirstMessage = userMessages.length === 0;
 
@@ -823,6 +862,27 @@ Type your answer or speak in the voice room...`;
   ): void {
     this.logger.log(`[RecordDone] Queuing merge for session ${sessionId}, ${fileResults.length} tracks`);
     this.ttsQueue.add('record-done', { sessionId, roomName, fileResults });
+  }
+
+  private isRepeatRequest(text: string): boolean {
+    if (!text) return false;
+    const normalized = text.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+    const patterns = [
+      /(?:can|could|would)\s+you\s+(?:please\s+)?repeat/i,
+      /please\s+repeat/i,
+      /repeat\s+please/i,
+      /^(?:please\s+)?repeat\s+(?:the\s+)?(?:last\s+)?question(?:\s+again)?$/i,
+      /^(?:please\s+)?repeat\s+(?:that|it|again)(?:\s+again)?$/i,
+      /^(?:please\s+)?say\s+(?:that|it|again)\s+again$/i,
+      /^(?:please\s+)?say\s+(?:that|it)\s+one\s+more\s+time$/i,
+      /what\s+was\s+the\s+question/i,
+      /didnt\s+hear\s+the\s+question/i,
+      /couldnt\s+hear\s+the\s+question/i,
+      /didnt\s+catch\s+that/i,
+      /couldnt\s+catch\s+that/i,
+      /^pardon(?:\s+me)?$/i,
+    ];
+    return patterns.some((regex) => regex.test(normalized));
   }
 
 }

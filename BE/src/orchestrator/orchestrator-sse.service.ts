@@ -543,11 +543,33 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.transcriptSSEs.set(roomName, es);
   }
 
-  private handleFinalTranscript(roomName: string, sessionId: string, text: string): void {
+  private async handleFinalTranscript(roomName: string, sessionId: string, text: string): Promise<void> {
     const trimmed = text?.trim();
     if (!trimmed || trimmed.length < 2) return;
 
     this.logger.log(`[Transcript][${roomName}] FINAL: "${trimmed}"`);
+
+    // Fast-track start check: If candidate responds to greeting, start Q1 immediately without waiting for debounce timer
+    let isFastTrack = false;
+    try {
+      const session = await this.sessionService.getSessionById(sessionId);
+      if (session && session.currentQuestionIndex === 0 && this.isStartRequest(trimmed)) {
+        isFastTrack = true;
+      }
+    } catch (e) {
+      this.logger.error(`Error loading session for fast-track check:`, e);
+    }
+
+    if (isFastTrack) {
+      this.logger.log(`[Transcript][${roomName}] ⚡ Fast-track start fired: "${trimmed}"`);
+      const existing = this.answerDebounceTimers.get(roomName);
+      if (existing) clearTimeout(existing);
+      this.answerDebounceTimers.delete(roomName);
+      this.pendingTranscripts.delete(roomName);
+
+      await this.processVoiceAnswer(roomName, sessionId, trimmed);
+      return;
+    }
 
     const chunks = this.pendingTranscripts.get(roomName) || [];
     chunks.push(trimmed);
@@ -934,5 +956,16 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Error in handleRepeatQuestionRequest:`, error);
     }
+  }
+
+  private isStartRequest(text: string): boolean {
+    if (!text) return false;
+    const normalized = text.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+    const words = normalized.split(/\s+/);
+    if (words.length <= 3) {
+      const startKeywords = ['ready', 'start', 'yes', 'begin', 'ok', 'okay', 'sure', 'hello', 'hi', 'go', 'yep', 'yeah'];
+      return words.some(w => startKeywords.includes(w));
+    }
+    return false;
   }
 }

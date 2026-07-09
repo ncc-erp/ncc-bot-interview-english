@@ -375,11 +375,11 @@ export class AgentService {
    * Accumulates text and resets a 3s debounce timer.
    * When timer fires (user stopped speaking), processes the full answer.
    */
-  private handleVoiceMessage(
+  private async handleVoiceMessage(
     roomName: string,
     data: string,
     client: Nezon.Client,
-  ): void {
+  ): Promise<void> {
     try {
       const voiceText = data.trim();
 
@@ -388,6 +388,31 @@ export class AgentService {
       }
 
       this.logger.log(`[Voice][Room ${roomName}] FINAL chunk: "${voiceText}"`);
+
+      // Fast-track start check: If candidate responds to greeting, start Q1 immediately without waiting for debounce timer
+      const sessionId = this.roomSessions.get(roomName);
+      let isFastTrack = false;
+      if (sessionId) {
+        try {
+          const session = await this.getCachedSession(sessionId);
+          if (session && session.currentQuestionIndex === 0 && this.isStartRequest(voiceText)) {
+            isFastTrack = true;
+          }
+        } catch (e) {
+          this.logger.error(`Error loading session for fast-track check:`, e);
+        }
+      }
+
+      if (isFastTrack) {
+        this.logger.log(`[Voice][Room ${roomName}] ⚡ Fast-track start fired: "${voiceText}"`);
+        const existing = this.answerDebounceTimers.get(roomName);
+        if (existing) clearTimeout(existing);
+        this.answerDebounceTimers.delete(roomName);
+        this.pendingTranscripts.delete(roomName);
+
+        await this.processVoiceAnswer(roomName, voiceText, client);
+        return;
+      }
 
       // Accumulate transcript chunks for this room
       const chunks = this.pendingTranscripts.get(roomName) || [];
@@ -883,6 +908,17 @@ Type your answer or speak in the voice room...`;
       /^pardon(?:\s+me)?$/i,
     ];
     return patterns.some((regex) => regex.test(normalized));
+  }
+
+  private isStartRequest(text: string): boolean {
+    if (!text) return false;
+    const normalized = text.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+    const words = normalized.split(/\s+/);
+    if (words.length <= 3) {
+      const startKeywords = ['ready', 'start', 'yes', 'begin', 'ok', 'okay', 'sure', 'hello', 'hi', 'go', 'yep', 'yeah'];
+      return words.some(w => startKeywords.includes(w));
+    }
+    return false;
   }
 
 }

@@ -18,7 +18,7 @@ import { InterviewSessionService } from "@/interviewer/interview-session.service
 import { MessageRole, MessageType } from "@/database-test/entities/session-message.entity";
 import { BotAuthService } from "@/auth/bot-auth.service";
 import { EventSourcePolyfill } from 'event-source-polyfill';
-import { isRepeatRequest, isStartRequest } from "@/shared/utils/interview";
+import { isRepeatRequest, isStartRequest, getRepeatText } from "@/shared/utils/interview";
 
 interface VoiceBuffer {
   chunks: string[];
@@ -473,26 +473,13 @@ export class AgentService {
           await channel.send({ t: `🎤 **Your request:** ${fullText}` });
         }
 
-        let repeatText = '';
+        const repeatText = await getRepeatText(session, this.interviewer);
         if (session.currentQuestionIndex === 0) {
-          const lastAssistantMessage = session.messages
-            ?.filter((m: any) => m.role === MessageRole.ASSISTANT)
-            ?.at(-1)?.content;
-          repeatText = lastAssistantMessage || await this.interviewer.generateGreeting(session.template);
-
           await this.sendTTS(roomName, repeatText);
           if (channel) {
             await channel.send({ t: `🤖 **Greeting:**\n\n${repeatText}` });
           }
         } else {
-          const currentQuestion = session.messages
-            ?.filter((m: any) =>
-              m.role === MessageRole.ASSISTANT &&
-              m.questionNumber === session.currentQuestionIndex
-            )
-            ?.at(-1)?.content;
-          repeatText = currentQuestion || await this.interviewer.generateQuestion(session, session.currentQuestionIndex);
-
           await this.sendTTS(roomName, repeatText);
           if (channel) {
             await channel.send({

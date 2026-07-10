@@ -12,7 +12,7 @@ import { AGENT_ENDPOINTS } from '@/shared/constants/agent';
 import { EventSourcePolyfill } from 'event-source-polyfill';
 import { BotAuthService } from '@/auth/bot-auth.service';
 import { InterviewTemplate } from '@/database-test/entities/interview-template.entity';
-import { isRepeatRequest, isStartRequest } from '@/shared/utils/interview';
+import { isRepeatRequest, isStartRequest, getRepeatText } from '@/shared/utils/interview';
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
@@ -629,25 +629,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`[Repeat] Detected repeat request from voice in room ${roomName}: "${fullText}"`);
         await this.sendChatMessage(roomName, `🎤 ${fullText}`);
 
-        let repeatText = '';
+        const repeatText = await getRepeatText(session, this.interviewerService);
         if (session.currentQuestionIndex === 0) {
-          const lastAssistantMessage = session.messages
-            ?.filter((m: any) => m.role === MessageRole.ASSISTANT)
-            ?.at(-1)?.content;
-          repeatText = lastAssistantMessage || await this.interviewerService.generateGreeting(session.template);
-
           await this.sendChatMessage(roomName, `I didn't catch that. Let me repeat the greeting.`);
           await this.agentService.sendTTS(roomName, repeatText);
           await this.sendChatMessage(roomName, `🤖 ${repeatText}`);
         } else {
-          const currentQuestion = session.messages
-            ?.filter((m: any) =>
-              m.role === MessageRole.ASSISTANT &&
-              m.questionNumber === session.currentQuestionIndex
-            )
-            ?.at(-1)?.content;
-          repeatText = currentQuestion || await this.interviewerService.generateQuestion(session, session.currentQuestionIndex);
-
           await this.sendChatMessage(roomName, `Let me repeat the question.`);
           await this.agentService.sendTTS(roomName, repeatText);
           await this.sendChatMessage(roomName, `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);
@@ -907,25 +894,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       this.clearSilenceTimer(roomName);
 
-      let repeatText = '';
+      const repeatText = await getRepeatText(session, this.interviewerService);
       if (session.currentQuestionIndex === 0) {
-        const lastAssistantMessage = session.messages
-          ?.filter((m: any) => m.role === MessageRole.ASSISTANT)
-          ?.at(-1)?.content;
-        repeatText = lastAssistantMessage || await this.interviewerService.generateGreeting(session.template);
-
         await this.sendChatMessage(roomName, `I didn't catch that. Let me repeat the greeting.`);
         await this.agentService.sendTTS(roomName, repeatText);
         await this.sendChatMessage(roomName, `🤖 ${repeatText}`);
       } else {
-        const currentQuestion = session.messages
-          ?.filter((m: any) =>
-            m.role === MessageRole.ASSISTANT &&
-            m.questionNumber === session.currentQuestionIndex
-          )
-          ?.at(-1)?.content;
-        repeatText = currentQuestion || await this.interviewerService.generateQuestion(session, session.currentQuestionIndex);
-
         await this.sendChatMessage(roomName, `Let me repeat the question.`);
         await this.agentService.sendTTS(roomName, repeatText);
         await this.sendChatMessage(roomName, `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);

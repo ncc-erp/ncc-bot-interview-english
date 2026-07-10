@@ -35,3 +35,30 @@ export function isStartRequest(text: string): boolean {
   }
   return false;
 }
+
+/**
+ * Resolves the content text of the repeat request (either the greeting or the current question).
+ */
+export async function getRepeatText(
+  session: any,
+  interviewerService: {
+    generateGreeting(template: any): Promise<string>;
+    generateQuestion(session: any, questionIndex: number): Promise<string>;
+  }
+): Promise<string> {
+  if (session.currentQuestionIndex === 0) {
+    const lastAssistantMessage = session.messages
+      ?.filter((m: any) => m.role === 'assistant')
+      ?.at(-1)?.content;
+    return lastAssistantMessage || await interviewerService.generateGreeting(session.template);
+  } else {
+    const currentQuestion = session.messages
+      ?.filter((m: any) =>
+        m.role === 'assistant' &&
+        m.questionNumber === session.currentQuestionIndex
+      )
+      ?.at(-1)?.content;
+    return currentQuestion || await interviewerService.generateQuestion(session, session.currentQuestionIndex);
+  }
+}
+

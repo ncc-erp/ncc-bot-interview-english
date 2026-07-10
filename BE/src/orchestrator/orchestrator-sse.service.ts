@@ -12,6 +12,7 @@ import { AGENT_ENDPOINTS } from '@/shared/constants/agent';
 import { EventSourcePolyfill } from 'event-source-polyfill';
 import { BotAuthService } from '@/auth/bot-auth.service';
 import { InterviewTemplate } from '@/database-test/entities/interview-template.entity';
+import { isRepeatRequest, isStartRequest } from '@/shared/utils/interview';
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
@@ -261,7 +262,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.handleStopCommand(roomName, identity);
     } else if (message === '*end') {
       this.handleEndCommand(roomName, identity);
-    } else if (this.isRepeatRequest(message)) {
+    } else if (isRepeatRequest(message)) {
       this.handleRepeatQuestionRequest(roomName, identity);
     } else {
       this.handleNumberSelection(roomName, identity, message);
@@ -553,7 +554,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     let isFastTrack = false;
     try {
       const session = await this.sessionService.getSessionById(sessionId);
-      if (session && session.currentQuestionIndex === 0 && this.isStartRequest(trimmed)) {
+      if (session && session.currentQuestionIndex === 0 && isStartRequest(trimmed)) {
         isFastTrack = true;
       }
     } catch (e) {
@@ -624,7 +625,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const session = await this.sessionService.getSessionById(sessionId);
       if (!session) return;
 
-      if (this.isRepeatRequest(fullText)) {
+      if (isRepeatRequest(fullText)) {
         this.logger.log(`[Repeat] Detected repeat request from voice in room ${roomName}: "${fullText}"`);
         await this.sendChatMessage(roomName, `🎤 ${fullText}`);
 
@@ -896,27 +897,6 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.roomIds.delete(roomName);
   }
 
-  private isRepeatRequest(text: string): boolean {
-    if (!text) return false;
-    const normalized = text.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
-    const patterns = [
-      /(?:can|could|would)\s+you\s+(?:please\s+)?repeat/i,
-      /please\s+repeat/i,
-      /repeat\s+please/i,
-      /^(?:please\s+)?repeat\s+(?:the\s+)?(?:last\s+)?question(?:\s+again)?$/i,
-      /^(?:please\s+)?repeat\s+(?:that|it|again)(?:\s+again)?$/i,
-      /^(?:please\s+)?say\s+(?:that|it|again)\s+again$/i,
-      /^(?:please\s+)?say\s+(?:that|it)\s+one\s+more\s+time$/i,
-      /what\s+was\s+the\s+question/i,
-      /didnt\s+hear\s+the\s+question/i,
-      /couldnt\s+hear\s+the\s+question/i,
-      /didnt\s+catch\s+that/i,
-      /couldnt\s+catch\s+that/i,
-      /^pardon(?:\s+me)?$/i,
-    ];
-    return patterns.some((regex) => regex.test(normalized));
-  }
-
   private async handleRepeatQuestionRequest(roomName: string, participantIdentity: string): Promise<void> {
     try {
       const session = await this.sessionService.findSessionByUserAndRoom(participantIdentity, roomName);
@@ -956,16 +936,5 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Error in handleRepeatQuestionRequest:`, error);
     }
-  }
-
-  private isStartRequest(text: string): boolean {
-    if (!text) return false;
-    const normalized = text.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
-    const words = normalized.split(/\s+/);
-    if (words.length <= 3) {
-      const startKeywords = ['ready', 'start', 'yes', 'begin', 'ok', 'okay', 'sure', 'hello', 'hi', 'go', 'yep', 'yeah'];
-      return words.some(w => startKeywords.includes(w));
-    }
-    return false;
   }
 }

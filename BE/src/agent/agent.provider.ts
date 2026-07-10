@@ -18,6 +18,7 @@ import { InterviewSessionService } from "@/interviewer/interview-session.service
 import { MessageRole, MessageType } from "@/database-test/entities/session-message.entity";
 import { BotAuthService } from "@/auth/bot-auth.service";
 import { EventSourcePolyfill } from 'event-source-polyfill';
+import { isRepeatRequest, isStartRequest, getRepeatText } from "@/shared/utils/interview";
 
 interface VoiceBuffer {
   chunks: string[];
@@ -375,11 +376,11 @@ export class AgentService {
    * Accumulates text and resets a 3s debounce timer.
    * When timer fires (user stopped speaking), processes the full answer.
    */
-  private handleVoiceMessage(
+  private async handleVoiceMessage(
     roomName: string,
     data: string,
     client: Nezon.Client,
-  ): void {
+  ): Promise<void> {
     try {
       const voiceText = data.trim();
 
@@ -388,6 +389,31 @@ export class AgentService {
       }
 
       this.logger.log(`[Voice][Room ${roomName}] FINAL chunk: "${voiceText}"`);
+
+      // Fast-track start check: If candidate responds to greeting, start Q1 immediately without waiting for debounce timer
+      const sessionId = this.roomSessions.get(roomName);
+      let isFastTrack = false;
+      if (sessionId) {
+        try {
+          const session = await this.getCachedSession(sessionId);
+          if (session && session.currentQuestionIndex === 0 && isStartRequest(voiceText)) {
+            isFastTrack = true;
+          }
+        } catch (e) {
+          this.logger.error(`Error loading session for fast-track check:`, e);
+        }
+      }
+
+      if (isFastTrack) {
+        this.logger.log(`[Voice][Room ${roomName}] ⚡ Fast-track start fired: "${voiceText}"`);
+        const existing = this.answerDebounceTimers.get(roomName);
+        if (existing) clearTimeout(existing);
+        this.answerDebounceTimers.delete(roomName);
+        this.pendingTranscripts.delete(roomName);
+
+        await this.processVoiceAnswer(roomName, voiceText, client);
+        return;
+      }
 
       // Accumulate transcript chunks for this room
       const chunks = this.pendingTranscripts.get(roomName) || [];
@@ -435,6 +461,32 @@ export class AgentService {
       const session = await this.getCachedSession(sessionId);
       if (!session) {
         this.logger.warn(`[Voice] Session ${sessionId} not found`);
+        return;
+      }
+
+      if (isRepeatRequest(fullText)) {
+        this.logger.log(`[Repeat] Detected repeat request from voice in clan room ${roomName}: "${fullText}"`);
+
+        // Show in text channel
+        const channel = client.channels.get(session.channelId);
+        if (channel) {
+          await channel.send({ t: `🎤 **Your request:** ${fullText}` });
+        }
+
+        const repeatText = await getRepeatText(session, this.interviewer);
+        if (session.currentQuestionIndex === 0) {
+          await this.sendTTS(roomName, repeatText);
+          if (channel) {
+            await channel.send({ t: `🤖 **Greeting:**\n\n${repeatText}` });
+          }
+        } else {
+          await this.sendTTS(roomName, repeatText);
+          if (channel) {
+            await channel.send({
+              t: `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n\n${repeatText}`
+            });
+          }
+        }
         return;
       }
 

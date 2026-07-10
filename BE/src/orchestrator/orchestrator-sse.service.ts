@@ -12,6 +12,7 @@ import { AGENT_ENDPOINTS } from '@/shared/constants/agent';
 import { EventSourcePolyfill } from 'event-source-polyfill';
 import { BotAuthService } from '@/auth/bot-auth.service';
 import { InterviewTemplate } from '@/database-test/entities/interview-template.entity';
+import { isRepeatRequest, isStartRequest, getRepeatText } from '@/shared/utils/interview';
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
@@ -261,6 +262,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.handleStopCommand(roomName, identity);
     } else if (message === '*end') {
       this.handleEndCommand(roomName, identity);
+    } else if (isRepeatRequest(message)) {
+      this.handleRepeatQuestionRequest(roomName, identity);
     } else {
       this.handleNumberSelection(roomName, identity, message);
     }
@@ -541,11 +544,33 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.transcriptSSEs.set(roomName, es);
   }
 
-  private handleFinalTranscript(roomName: string, sessionId: string, text: string): void {
+  private async handleFinalTranscript(roomName: string, sessionId: string, text: string): Promise<void> {
     const trimmed = text?.trim();
     if (!trimmed || trimmed.length < 2) return;
 
     this.logger.log(`[Transcript][${roomName}] FINAL: "${trimmed}"`);
+
+    // Fast-track start check: If candidate responds to greeting, start Q1 immediately without waiting for debounce timer
+    let isFastTrack = false;
+    try {
+      const session = await this.sessionService.getSessionById(sessionId);
+      if (session && session.currentQuestionIndex === 0 && isStartRequest(trimmed)) {
+        isFastTrack = true;
+      }
+    } catch (e) {
+      this.logger.error(`Error loading session for fast-track check:`, e);
+    }
+
+    if (isFastTrack) {
+      this.logger.log(`[Transcript][${roomName}] ⚡ Fast-track start fired: "${trimmed}"`);
+      const existing = this.answerDebounceTimers.get(roomName);
+      if (existing) clearTimeout(existing);
+      this.answerDebounceTimers.delete(roomName);
+      this.pendingTranscripts.delete(roomName);
+
+      await this.processVoiceAnswer(roomName, sessionId, trimmed);
+      return;
+    }
 
     const chunks = this.pendingTranscripts.get(roomName) || [];
     chunks.push(trimmed);
@@ -599,6 +624,26 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       const session = await this.sessionService.getSessionById(sessionId);
       if (!session) return;
+
+      if (isRepeatRequest(fullText)) {
+        this.logger.log(`[Repeat] Detected repeat request from voice in room ${roomName}: "${fullText}"`);
+        await this.sendChatMessage(roomName, `🎤 ${fullText}`);
+
+        const repeatText = await getRepeatText(session, this.interviewerService);
+        if (session.currentQuestionIndex === 0) {
+          await this.sendChatMessage(roomName, `I didn't catch that. Let me repeat the greeting.`);
+          await this.agentService.sendTTS(roomName, repeatText);
+          await this.sendChatMessage(roomName, `🤖 ${repeatText}`);
+        } else {
+          await this.sendChatMessage(roomName, `Let me repeat the question.`);
+          await this.agentService.sendTTS(roomName, repeatText);
+          await this.sendChatMessage(roomName, `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);
+
+          // Restart silence timer
+          this.startSilenceTimer(roomName, session.id, session.currentQuestionIndex, session.template.numberOfQuestions);
+        }
+        return;
+      }
 
       const userMessages = session.messages?.filter((m: any) => m.role === MessageRole.USER) || [];
       const isFirstMessage = userMessages.length === 0;
@@ -683,7 +728,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
             session.messages
               ?.filter((m: any) =>
                 m.role === MessageRole.ASSISTANT &&
-                m.questionIndex === questionNumber
+                m.questionNumber === questionNumber
               )
               ?.at(-1)?.content;
 
@@ -837,5 +882,33 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.awaitingTemplateSelection.delete(roomName);
     this.roomSessionMap.delete(roomName);
     this.roomIds.delete(roomName);
+  }
+
+  private async handleRepeatQuestionRequest(roomName: string, participantIdentity: string): Promise<void> {
+    try {
+      const session = await this.sessionService.findSessionByUserAndRoom(participantIdentity, roomName);
+      if (!session) {
+        this.logger.warn(`[Repeat] No active session found for user ${participantIdentity} in room ${roomName}`);
+        return;
+      }
+
+      this.clearSilenceTimer(roomName);
+
+      const repeatText = await getRepeatText(session, this.interviewerService);
+      if (session.currentQuestionIndex === 0) {
+        await this.sendChatMessage(roomName, `I didn't catch that. Let me repeat the greeting.`);
+        await this.agentService.sendTTS(roomName, repeatText);
+        await this.sendChatMessage(roomName, `🤖 ${repeatText}`);
+      } else {
+        await this.sendChatMessage(roomName, `Let me repeat the question.`);
+        await this.agentService.sendTTS(roomName, repeatText);
+        await this.sendChatMessage(roomName, `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);
+
+        // Restart silence timer
+        this.startSilenceTimer(roomName, session.id, session.currentQuestionIndex, session.template.numberOfQuestions);
+      }
+    } catch (error) {
+      this.logger.error(`Error in handleRepeatQuestionRequest:`, error);
+    }
   }
 }

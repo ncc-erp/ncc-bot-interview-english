@@ -1,10 +1,15 @@
 import { apiFetch } from "@/lib/apiClient";
 
+export type SectionType = 'STANDARD' | 'IELTS_PART2';
+
 export interface QuestionSection {
   name: string;
   description?: string;
+  type?: SectionType;
   questions: string[];
   questionsToSelect: number;
+  prepTimeSeconds?: number;
+  speakingTimeSeconds?: number;
 }
 
 export interface InterviewTemplate {

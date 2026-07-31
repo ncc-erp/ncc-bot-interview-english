@@ -33,8 +33,27 @@ function SectionEditor({
   onChange: (updated: QuestionSection) => void;
   onRemove: () => void;
 }) {
+  const isPart2 = section.type === "IELTS_PART2";
+
   const update = (patch: Partial<QuestionSection>) =>
     onChange({ ...section, ...patch });
+
+  const handleTypeChange = (newType: "STANDARD" | "IELTS_PART2") => {
+    if (newType === "IELTS_PART2") {
+      update({
+        type: newType,
+        questionsToSelect: 1,
+        questions: section.questions.length > 0 ? [section.questions[0]] : [""],
+        prepTimeSeconds: section.prepTimeSeconds ?? 60,
+        speakingTimeSeconds: section.speakingTimeSeconds ?? 120,
+      });
+    } else {
+      update({
+        type: newType,
+        questionsToSelect: section.questionsToSelect || 1,
+      });
+    }
+  };
 
   const addQuestion = () =>
     update({ questions: [...section.questions, ""] });
@@ -56,8 +75,8 @@ function SectionEditor({
       {section.name && (
         <span style={{ color: "#333", fontWeight: 500 }}>{section.name}</span>
       )}
-      <Tag color="purple" style={{ marginLeft: "auto" }}>
-        {section.questions.length} questions · Select {section.questionsToSelect}
+      <Tag color={isPart2 ? "gold" : "purple"} style={{ marginLeft: "auto" }}>
+        {isPart2 ? "IELTS Part 2 (Cue Card)" : `${section.questions.length} questions · Select ${section.questionsToSelect}`}
       </Tag>
     </div>
   );
@@ -80,13 +99,22 @@ function SectionEditor({
       }
     >
       {/* Section meta */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr auto", gap: 10, marginBottom: 12 }}>
         <Form.Item label="Section Name" style={{ margin: 0 }} required>
           <Input
             value={section.name}
             onChange={(e) => update({ name: e.target.value })}
-            placeholder="e.g. I. Personal Information"
+            placeholder="e.g. Part 2: Cue Card Speaking"
           />
+        </Form.Item>
+        <Form.Item label="Section Type" style={{ margin: 0 }}>
+          <Select
+            value={section.type || "STANDARD"}
+            onChange={(val) => handleTypeChange(val as "STANDARD" | "IELTS_PART2")}
+          >
+            <Option value="STANDARD">Standard Pool</Option>
+            <Option value="IELTS_PART2">IELTS Part 2</Option>
+          </Select>
         </Form.Item>
         <Form.Item label="Description" style={{ margin: 0 }}>
           <Input
@@ -95,62 +123,99 @@ function SectionEditor({
             placeholder="Short description of this section"
           />
         </Form.Item>
-        <Form.Item
-          label={
-            <span>
-              Questions to select&nbsp;
-              <Tooltip title="How many questions will be randomly picked from this section during an interview">
-                <QuestionCircleOutlined style={{ color: "#888" }} />
-              </Tooltip>
-            </span>
-          }
-          style={{ margin: 0 }}
-        >
-          <InputNumber
-            min={1}
-            max={section.questions.length || 1}
-            value={section.questionsToSelect}
-            onChange={(v) => update({ questionsToSelect: v ?? 1 })}
-            style={{ width: 80 }}
-          />
-        </Form.Item>
+        {!isPart2 && (
+          <Form.Item
+            label={
+              <span>
+                Questions to select&nbsp;
+                <Tooltip title="How many questions will be randomly picked from this section during an interview">
+                  <QuestionCircleOutlined style={{ color: "#888" }} />
+                </Tooltip>
+              </span>
+            }
+            style={{ margin: 0 }}
+          >
+            <InputNumber
+              min={1}
+              max={section.questions.length || 1}
+              value={section.questionsToSelect}
+              onChange={(v) => update({ questionsToSelect: v ?? 1 })}
+              style={{ width: 80 }}
+            />
+          </Form.Item>
+        )}
       </div>
 
-      {/* Questions */}
-      <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 13, color: "#555" }}>
-        Questions ({section.questions.length})
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {section.questions.map((q, qi) => (
-          <div key={qi} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-            <span style={{ paddingTop: 6, color: "#888", fontSize: 12, minWidth: 20 }}>
-              {qi + 1}.
-            </span>
-            <Input
-              value={q}
-              onChange={(e) => updateQuestion(qi, e.target.value)}
-              placeholder={`Question ${qi + 1}`}
-              style={{ flex: 1 }}
-            />
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => removeQuestion(qi)}
-              style={{ marginTop: 2, flexShrink: 0 }}
-            />
+      {isPart2 ? (
+        <>
+          <div style={{ display: "flex", gap: 16, marginBottom: 12, background: "#fffbe6", padding: 10, borderRadius: 6, border: "1px solid #ffe58f" }}>
+            <Form.Item label="Prep Time (seconds)" style={{ margin: 0 }}>
+              <InputNumber
+                min={10}
+                max={300}
+                value={section.prepTimeSeconds ?? 60}
+                onChange={(v) => update({ prepTimeSeconds: v ?? 60 })}
+              />
+            </Form.Item>
+            <Form.Item label="Speaking Time (seconds)" style={{ margin: 0 }}>
+              <InputNumber
+                min={30}
+                max={600}
+                value={section.speakingTimeSeconds ?? 120}
+                onChange={(v) => update({ speakingTimeSeconds: v ?? 120 })}
+              />
+            </Form.Item>
           </div>
-        ))}
-      </div>
-      <Button
-        size="small"
-        type="dashed"
-        icon={<PlusOutlined />}
-        onClick={addQuestion}
-        style={{ marginTop: 8, width: "100%" }}
-      >
-        Add Question
-      </Button>
+          <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 13, color: "#d48806" }}>
+            Cue Card Prompt (Topic & Guidelines)
+          </div>
+          <TextArea
+            rows={5}
+            value={section.questions[0] || ""}
+            onChange={(e) => updateQuestion(0, e.target.value)}
+            placeholder={"Describe a memorable trip you took.\nYou should say:\n- Where you went\n- Who you went with\n- What you did\nAnd explain why it was memorable."}
+            style={{ fontFamily: "monospace", fontSize: 13 }}
+          />
+        </>
+      ) : (
+        <>
+          {/* Questions */}
+          <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 13, color: "#555" }}>
+            Questions ({section.questions.length})
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {section.questions.map((q, qi) => (
+              <div key={qi} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                <span style={{ paddingTop: 6, color: "#888", fontSize: 12, minWidth: 20 }}>
+                  {qi + 1}.
+                </span>
+                <Input
+                  value={q}
+                  onChange={(e) => updateQuestion(qi, e.target.value)}
+                  placeholder={`Question ${qi + 1}`}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => removeQuestion(qi)}
+                  style={{ marginTop: 2, flexShrink: 0 }}
+                />
+              </div>
+            ))}
+          </div>
+          <Button
+            size="small"
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={addQuestion}
+            style={{ marginTop: 8, width: "100%" }}
+          >
+            Add Question
+          </Button>
+        </>
+      )}
     </Card>
   );
 }
@@ -203,7 +268,7 @@ export default function TemplateFormPage({ mode }: Props) {
   const addSection = () => {
     setSections((prev) => [
       ...prev,
-      { name: "", description: "", questions: [""], questionsToSelect: 1 },
+      { name: "", description: "", type: "STANDARD", questions: [""], questionsToSelect: 1, prepTimeSeconds: 60, speakingTimeSeconds: 120 },
     ]);
   };
 

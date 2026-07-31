@@ -1,10 +1,15 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
+export type SectionType = 'STANDARD' | 'IELTS_PART2';
+
 export interface QuestionSection {
   name: string;
   description?: string;
+  type?: SectionType;
   questions: string[];
   questionsToSelect: number; // How many questions to randomly select from this section
+  prepTimeSeconds?: number;
+  speakingTimeSeconds?: number;
 }
 
 @Entity('interview_templates')

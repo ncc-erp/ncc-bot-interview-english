@@ -38,7 +38,7 @@ function SectionEditor({
   const update = (patch: Partial<QuestionSection>) =>
     onChange({ ...section, ...patch });
 
-  const handleTypeChange = (newType: "STANDARD" | "IELTS_PART2") => {
+  const handleTypeChange = (newType: "STANDARD" | "IELTS_PART1" | "IELTS_PART2" | "IELTS_PART3") => {
     if (newType === "IELTS_PART2") {
       update({
         type: newType,
@@ -67,6 +67,23 @@ function SectionEditor({
   const removeQuestion = (qi: number) =>
     update({ questions: section.questions.filter((_, i) => i !== qi) });
 
+  const getTag = () => {
+    switch (section.type) {
+      case "IELTS_PART1":
+        return <Tag color="blue" style={{ marginLeft: "auto" }}>IELTS Part 1 (General)</Tag>;
+      case "IELTS_PART2":
+        return <Tag color="gold" style={{ marginLeft: "auto" }}>IELTS Part 2 (Cue Card)</Tag>;
+      case "IELTS_PART3":
+        return <Tag color="green" style={{ marginLeft: "auto" }}>IELTS Part 3 (Discussion)</Tag>;
+      default:
+        return (
+          <Tag color="purple" style={{ marginLeft: "auto" }}>
+            {section.questions.length} questions picking {section.questionsToSelect}
+          </Tag>
+        );
+    }
+  };
+
   const header = (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
       <span style={{ fontWeight: 600, color: "#1677ff" }}>
@@ -75,9 +92,7 @@ function SectionEditor({
       {section.name && (
         <span style={{ color: "#333", fontWeight: 500 }}>{section.name}</span>
       )}
-      <Tag color={isPart2 ? "gold" : "purple"} style={{ marginLeft: "auto" }}>
-        {isPart2 ? "IELTS Part 2 (Cue Card)" : `${section.questions.length} questions · Select ${section.questionsToSelect}`}
-      </Tag>
+      {getTag()}
     </div>
   );
 
@@ -110,10 +125,12 @@ function SectionEditor({
         <Form.Item label="Section Type" style={{ margin: 0 }}>
           <Select
             value={section.type || "STANDARD"}
-            onChange={(val) => handleTypeChange(val as "STANDARD" | "IELTS_PART2")}
+            onChange={(val) => handleTypeChange(val as any)}
           >
             <Option value="STANDARD">Standard Pool</Option>
-            <Option value="IELTS_PART2">IELTS Part 2</Option>
+            <Option value="IELTS_PART1">IELTS Part 1 (General)</Option>
+            <Option value="IELTS_PART2">IELTS Part 2 (Cue Card)</Option>
+            <Option value="IELTS_PART3">IELTS Part 3 (Discussion)</Option>
           </Select>
         </Form.Item>
         <Form.Item label="Description" style={{ margin: 0 }}>
@@ -127,8 +144,8 @@ function SectionEditor({
           <Form.Item
             label={
               <span>
-                Questions to select&nbsp;
-                <Tooltip title="How many questions will be randomly picked from this section during an interview">
+                Questions pick&nbsp;
+                <Tooltip title="How many questions will be picked from this section">
                   <QuestionCircleOutlined style={{ color: "#888" }} />
                 </Tooltip>
               </span>
@@ -249,6 +266,7 @@ export default function TemplateFormPage({ mode }: Props) {
       .then((t) => {
         form.setFieldsValue({
           name: t.name,
+          type: t.type ?? 1,
           description: t.description,
           isAiGenerated: t.isAiGenerated !== false,
           systemPrompt: t.systemPrompt,
@@ -294,6 +312,7 @@ export default function TemplateFormPage({ mode }: Props) {
 
       const payload: TemplateFormData = {
         name: values.name,
+        type: values.type ?? 1,
         description: values.description ?? "",
         isAiGenerated: !!values.isAiGenerated,
         systemPrompt: values.isAiGenerated ? values.systemPrompt : "",
@@ -345,7 +364,7 @@ export default function TemplateFormPage({ mode }: Props) {
         <Alert type="error" message={error} closable onClose={() => setError(null)} style={{ marginBottom: 16 }} />
       )}
 
-      <Form form={form} layout="vertical" initialValues={{ isAiGenerated: false, numberOfQuestions: 5, isActive: true }}>
+      <Form form={form} layout="vertical" initialValues={{ type: 1, isAiGenerated: false, numberOfQuestions: 5, isActive: true }}>
         <Tabs
           items={[
             {
@@ -356,6 +375,13 @@ export default function TemplateFormPage({ mode }: Props) {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
                     <Form.Item label="Template Name" name="name" rules={[{ required: true, message: "Name is required" }]}>
                       <Input placeholder="e.g. HR Interview Simulation" />
+                    </Form.Item>
+
+                    <Form.Item label="Template Type" name="type" rules={[{ required: true }]}>
+                      <Select placeholder="Select Template Type">
+                        <Option value={1}>Standard Interview</Option>
+                        <Option value={2}>IELTS Speaking Test</Option>
+                      </Select>
                     </Form.Item>
 
                     <Form.Item label="Number of Questions" name="numberOfQuestions" rules={[{ required: true }]}>

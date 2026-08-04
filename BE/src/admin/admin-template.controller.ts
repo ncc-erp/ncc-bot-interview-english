@@ -22,6 +22,7 @@ import { AdminAuthGuard } from './admin-auth.guard';
 
 export class CreateTemplateDto {
   name: string;
+  type?: number;
   description: string;
   isAiGenerated?: boolean;
   systemPrompt: string;
@@ -33,6 +34,7 @@ export class CreateTemplateDto {
 
 export class UpdateTemplateDto {
   name?: string;
+  type?: number;
   description?: string;
   isAiGenerated?: boolean;
   systemPrompt?: string;
@@ -88,6 +90,7 @@ export class AdminTemplateController {
 
     const template = this.templateRepo.create({
       name: dto.name.trim(),
+      type: dto.type ?? 1,
       description: dto.description?.trim() ?? '',
       isAiGenerated: dto.isAiGenerated ?? true,
       systemPrompt: dto.systemPrompt?.trim() ?? '',
@@ -115,6 +118,7 @@ export class AdminTemplateController {
 
     Object.assign(template, {
       ...(dto.name !== undefined && { name: dto.name.trim() }),
+      ...(dto.type !== undefined && { type: dto.type }),
       ...(dto.description !== undefined && { description: dto.description.trim() }),
       ...(dto.isAiGenerated !== undefined && { isAiGenerated: dto.isAiGenerated }),
       ...(dto.systemPrompt !== undefined && { systemPrompt: dto.systemPrompt.trim() }),

@@ -1,15 +1,26 @@
 import { apiFetch } from "@/lib/apiClient";
 
+export enum TemplateType {
+  STANDARD = 1,
+  IELTS = 2,
+}
+
+export type SectionType = 'STANDARD' | 'IELTS_PART1' | 'IELTS_PART2' | 'IELTS_PART3';
+
 export interface QuestionSection {
   name: string;
   description?: string;
+  type?: SectionType;
   questions: string[];
   questionsToSelect: number;
+  prepTimeSeconds?: number;
+  speakingTimeSeconds?: number;
 }
 
 export interface InterviewTemplate {
   id: string;
   name: string;
+  type: number; // 1 = STANDARD, 2 = IELTS
   description: string;
   isAiGenerated: boolean;
   systemPrompt: string;
@@ -23,6 +34,7 @@ export interface InterviewTemplate {
 
 export interface TemplateFormData {
   name: string;
+  type: number; // 1 = STANDARD, 2 = IELTS
   description: string;
   isAiGenerated: boolean;
   systemPrompt: string;

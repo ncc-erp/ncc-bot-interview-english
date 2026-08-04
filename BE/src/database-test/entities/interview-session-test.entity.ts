@@ -1,5 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany,} from 'typeorm';
-import { InterviewTemplate } from './interview-template.entity';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { InterviewTemplate, SectionType } from './interview-template.entity';
 import { User } from './user-test.entity';
 import { SessionMessage } from './session-message.entity';
 
@@ -20,6 +20,9 @@ export enum SessionMode {
 export interface SelectedSection {
   sectionName: string;
   selectedQuestions: string[];
+  type?: SectionType;
+  prepTimeSeconds?: number;
+  speakingTimeSeconds?: number;
 } 
 
 export interface OverallFeedbackDto {

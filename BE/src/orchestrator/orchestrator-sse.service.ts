@@ -47,6 +47,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private readonly silenceTimers = new Map<string, NodeJS.Timeout>();
   private readonly SILENCE_TIMEOUT_MS = 15_000;
 
+  // IELTS Part 2 prep timers and phase tracking
+  private readonly prepTimers = new Map<string, NodeJS.Timeout>();
+  private readonly isPrepPhase = new Map<string, boolean>();
+  private readonly speakingTimers = new Map<string, NodeJS.Timeout>();
+  private readonly isBotSpeakingNextQuestion = new Map<string, boolean>();
+
   private readonly roomIds = new Map<string, string>();
   private readonly awaitingTemplateSelection = new Map<string, { identity: string; timestamp: number }>();
   private readonly templateSelectionTimers = new Map<string, NodeJS.Timeout>();
@@ -183,6 +189,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
     this.pendingTranscripts.delete(roomName);
     this.clearSilenceTimer(roomName);
+    this.clearPrepTimer(roomName);
+    this.clearSpeakingTimer(roomName);
     this.clearTemplateSelectionTimer(roomName);
     this.awaitingTemplateSelection.delete(roomName);
     this.roomSessionMap.delete(roomName);
@@ -544,11 +552,184 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.transcriptSSEs.set(roomName, es);
   }
 
+  private getSectionForQuestionNumber(session: any, questionNumber: number): any | null {
+    if (!session?.selectedSections || !session?.selectedQuestions) return null;
+    const targetQuestion = session.selectedQuestions[questionNumber - 1];
+    if (!targetQuestion) return null;
+
+    for (const section of session.selectedSections) {
+      if (section.selectedQuestions?.includes(targetQuestion)) {
+        return section;
+      }
+    }
+    return null;
+  }
+
+  private clearPrepTimer(roomName: string): void {
+    const timer = this.prepTimers.get(roomName);
+    if (timer) {
+      clearTimeout(timer);
+      this.prepTimers.delete(roomName);
+    }
+    this.isPrepPhase.delete(roomName);
+    this.isBotSpeakingNextQuestion.delete(roomName);
+  }
+
+  private clearSpeakingTimer(roomName: string): void {
+    const timer = this.speakingTimers.get(roomName);
+    if (timer) {
+      clearTimeout(timer);
+      this.speakingTimers.delete(roomName);
+    }
+    this.isBotSpeakingNextQuestion.delete(roomName);
+  }
+
+  private startPart2SpeakingTimer(
+    roomName: string,
+    sessionId: string,
+    questionNumber: number,
+    totalQuestions: number,
+    speakingSeconds: number,
+  ): void {
+    // Trigger notification 5s before actual time-up to compensate for TTS latency
+    const effectiveSpeakingTimerMs = Math.max(5, speakingSeconds - 5) * 1000;
+
+    const timer = setTimeout(async () => {
+      this.speakingTimers.delete(roomName);
+      this.logger.log(`[Part 2] Speaking time limit reached (triggered 5s early at ${effectiveSpeakingTimerMs / 1000}s) for Q${questionNumber} in room ${roomName}`);
+
+      // Lock transcript listening immediately to ignore late Part 2 speech & transition noise
+      this.isBotSpeakingNextQuestion.set(roomName, true);
+
+      // Clear any pending answer debounce timer and silence timer
+      const debounceTimer = this.answerDebounceTimers.get(roomName);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      this.answerDebounceTimers.delete(roomName);
+      this.clearSilenceTimer(roomName);
+
+      // Collect whatever text candidate spoke so far
+      const pending = this.pendingTranscripts.get(roomName) || [];
+      this.pendingTranscripts.delete(roomName);
+      const fullText = pending.join(' ').trim() || '[Speaking time ended]';
+
+      // Announce to candidate that speaking time is up
+      const timeUpMsg = `⏰ Your speaking time for Part 2 is up. Thank you!`;
+      await this.sendChatMessage(roomName, timeUpMsg, true);
+      await this.agentService.sendTTS(roomName, `Your speaking time for this part is up. Thank you.`);
+
+      // Delay 10 seconds before transitioning to Part 3 so user hears the time-up message and gets a smooth pause
+      setTimeout(async () => {
+        try {
+          const session = await this.sessionService.getSessionById(sessionId);
+          if (session) {
+            const userMessages = session.messages?.filter((m: any) => m.role === MessageRole.USER) || [];
+            const isFirstMessage = userMessages.length === 0;
+
+            await this.sessionService.addMessage(
+              session.id,
+              MessageRole.USER,
+              fullText,
+              MessageType.AUDIO,
+              isFirstMessage ? undefined : session.currentQuestionIndex,
+            );
+
+            // Clean up any stray transcripts/timers before transition
+            const strayTimer = this.answerDebounceTimers.get(roomName);
+            if (strayTimer) clearTimeout(strayTimer);
+            this.answerDebounceTimers.delete(roomName);
+            this.pendingTranscripts.delete(roomName);
+
+            await this.processNextStep(session, roomName);
+          }
+        } catch (e: any) {
+          this.logger.error(`Error handling Part 2 speaking time expiration:`, e);
+        }
+      }, 10000);
+    }, effectiveSpeakingTimerMs);
+
+    this.speakingTimers.set(roomName, timer);
+    this.logger.log(`[Part 2] Started ${effectiveSpeakingTimerMs / 1000}s speaking timer (5s buffer applied) for Q${questionNumber} in room ${roomName}`);
+  }
+
+  private async handlePart2QuestionStart(
+    roomName: string,
+    sessionId: string,
+    questionNumber: number,
+    totalQuestions: number,
+    section: any,
+    cueCardContent: string,
+    introPrefix = '',
+  ): Promise<void> {
+    const prepSeconds = section.prepTimeSeconds ?? 60;
+
+    // 1. Send the Cue Card content into chat
+    const cueCardChatMsg = `📋 **Topic:**\n\n${cueCardContent}`;
+    await this.sendChatMessage(roomName, cueCardChatMsg, true);
+
+    // 2. Bot speaks standard IELTS Part 2 instruction via TTS (combining intro into a single TTS call)
+    const instructionBody = `I'm going to give you a topic and I'd like you to talk about it for one to two minutes. You have ${prepSeconds} seconds to prepare your answer.`;
+    const part2Instruction = introPrefix ? `${introPrefix} ${instructionBody}` : `Now, ${instructionBody}`;
+    await this.agentService.sendTTS(roomName, part2Instruction);
+
+    // 3. Mark preparation phase
+    this.isPrepPhase.set(roomName, true);
+    this.clearPrepTimer(roomName);
+
+    // 4. Add 5s buffer to preparation timer for TTS speech time and network latency
+    const totalPrepTimerMs = (prepSeconds + 5) * 1000;
+
+    const timer = setTimeout(async () => {
+      this.prepTimers.delete(roomName);
+      this.isPrepPhase.delete(roomName);
+
+      const startSpeakingMsg = `🔔 Preparation time is up. Please start speaking now!`;
+      await this.sendChatMessage(roomName, startSpeakingMsg);
+      await this.agentService.sendTTS(roomName, `Your preparation time is up. Please start speaking now.`);
+
+      // Start Part 2 speaking timer & silence timer
+      const speakingSeconds = section.speakingTimeSeconds ?? 120;
+      this.startPart2SpeakingTimer(roomName, sessionId, questionNumber, totalQuestions, speakingSeconds);
+      this.startSilenceTimer(roomName, sessionId, questionNumber, totalQuestions, 0, true);
+    }, totalPrepTimerMs);
+
+    this.prepTimers.set(roomName, timer);
+    this.logger.log(`[Part 2] Started ${prepSeconds}+5s prep timer for Q${questionNumber} in room ${roomName}`);
+  }
+
   private async handleFinalTranscript(roomName: string, sessionId: string, text: string): Promise<void> {
     const trimmed = text?.trim();
     if (!trimmed || trimmed.length < 2) return;
 
+    if (this.isBotSpeakingNextQuestion.get(roomName)) {
+      this.logger.log(`[Transcript][${roomName}] Ignored while bot is introducing section/question: "${trimmed}"`);
+      return;
+    }
+
     this.logger.log(`[Transcript][${roomName}] FINAL: "${trimmed}"`);
+
+    // Check if in IELTS Part 2 preparation phase
+    if (this.isPrepPhase.get(roomName)) {
+      const lower = trimmed.toLowerCase();
+      if (lower.includes('ready') || lower.includes('start') || isStartRequest(trimmed)) {
+        this.logger.log(`[Part 2 Prep][${roomName}] ⚡ Candidate ready early during prep phase: "${trimmed}"`);
+        this.clearPrepTimer(roomName);
+
+        const startSpeakingMsg = `👍 Great! Please start speaking now.`;
+        await this.sendChatMessage(roomName, startSpeakingMsg);
+        await this.agentService.sendTTS(roomName, `Great! Please start speaking now.`);
+
+        const session = await this.sessionService.getSessionById(sessionId);
+        if (session) {
+          const currentSection = this.getSectionForQuestionNumber(session, session.currentQuestionIndex);
+          const speakingSeconds = currentSection?.speakingTimeSeconds ?? 120;
+          this.startPart2SpeakingTimer(roomName, sessionId, session.currentQuestionIndex, session.template.numberOfQuestions, speakingSeconds);
+          this.startSilenceTimer(roomName, sessionId, session.currentQuestionIndex, session.template.numberOfQuestions, 0, true);
+        }
+      } else {
+        this.logger.log(`[Part 2 Prep][${roomName}] Speech ignored during preparation phase: "${trimmed}"`);
+      }
+      return;
+    }
 
     // Fast-track start check: If candidate responds to greeting, start Q1 immediately without waiting for debounce timer
     let isFastTrack = false;
@@ -579,16 +760,30 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const existing = this.answerDebounceTimers.get(roomName);
     if (existing) clearTimeout(existing);
 
+    // Determine debounce MS: 10s for IELTS Part 2 long turn, 4s default
+    let debounceMs = this.ANSWER_DEBOUNCE_MS;
+    try {
+      const session = await this.sessionService.getSessionById(sessionId);
+      if (session) {
+        const currentSection = this.getSectionForQuestionNumber(session, session.currentQuestionIndex);
+        if (currentSection?.type === 'IELTS_PART2') {
+          debounceMs = 10_000; // 10s debounce for Part 2 per user configuration
+        }
+      }
+    } catch (e) {
+      this.logger.error(`Error checking section for debounce time:`, e);
+    }
+
     const timer = setTimeout(() => {
       this.answerDebounceTimers.delete(roomName);
       const fullText = (this.pendingTranscripts.get(roomName) || []).join(' ');
       this.pendingTranscripts.delete(roomName);
 
       if (fullText.trim()) {
-        this.logger.log(`[Transcript][${roomName}] ⏱️ Debounce fired: "${fullText}"`);
+        this.logger.log(`[Transcript][${roomName}] ⏱️ Debounce fired (${debounceMs}ms): "${fullText}"`);
         this.processVoiceAnswer(roomName, sessionId, fullText);
       }
-    }, this.ANSWER_DEBOUNCE_MS);
+    }, debounceMs);
 
     this.answerDebounceTimers.set(roomName, timer);
   }
@@ -621,6 +816,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     try {
       this.clearSilenceTimer(roomName);
+      this.clearSpeakingTimer(roomName);
 
       const session = await this.sessionService.getSessionById(sessionId);
       if (!session) return;
@@ -635,12 +831,24 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
           await this.agentService.sendTTS(roomName, repeatText);
           await this.sendChatMessage(roomName, `🤖 ${repeatText}`);
         } else {
-          await this.sendChatMessage(roomName, `Let me repeat the question.`);
-          await this.agentService.sendTTS(roomName, repeatText);
-          await this.sendChatMessage(roomName, `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);
+          const section = this.getSectionForQuestionNumber(session, session.currentQuestionIndex);
+          const isPart2 = section?.type === 'IELTS_PART2';
+
+          if (isPart2) {
+            const cueCardTopicText = repeatText;
+            const instructionBody = `I'm going to give you a topic and I'd like you to talk about it for one to two minutes.`;
+            const part2Instruction = `Now, ${instructionBody}`;
+            await this.sendChatMessage(roomName, `Let me repeat the instructions.`);
+            await this.agentService.sendTTS(roomName, part2Instruction);
+            await this.sendChatMessage(roomName, `📋 Topic:\n\n${cueCardTopicText}`, true);
+          } else {
+            await this.sendChatMessage(roomName, `Let me repeat the question.`);
+            await this.agentService.sendTTS(roomName, repeatText);
+            await this.sendChatMessage(roomName, `❓ Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);
+          }
 
           // Restart silence timer
-          this.startSilenceTimer(roomName, session.id, session.currentQuestionIndex, session.template.numberOfQuestions);
+          this.startSilenceTimer(roomName, session.id, session.currentQuestionIndex, session.template.numberOfQuestions, 0, isPart2);
         }
         return;
       }
@@ -700,10 +908,55 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     // Generate next question
     const nextQuestion = await this.interviewerService.generateQuestion(freshSession, nextQuestionNumber);
     await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, nextQuestion, MessageType.TEXT, nextQuestionNumber);
-    await this.agentService.sendTTS(roomName, nextQuestion);
-    await this.sendChatMessage(roomName, `❓ **Question ${nextQuestionNumber}/${totalQuestions}:**\n${nextQuestion}`);
 
-    this.startSilenceTimer(roomName, session.id, nextQuestionNumber, totalQuestions);
+    const prevSection = freshSession.currentQuestionIndex > 0
+      ? this.getSectionForQuestionNumber(freshSession, freshSession.currentQuestionIndex)
+      : null;
+    const nextSection = this.getSectionForQuestionNumber(freshSession, nextQuestionNumber);
+
+    const isNewSection = !prevSection || (nextSection && prevSection.name !== nextSection.name);
+    const isIeltsTemplate = freshSession.template?.type === 2;
+
+    let questionTextToSpeak = nextQuestion;
+    let part2IntroPrefix = '';
+
+    const isPart3Section = nextSection?.type === 'IELTS_PART3' || nextSection?.name?.toLowerCase().includes('part 3');
+
+    if (isNewSection && (isIeltsTemplate || nextSection?.type?.startsWith('IELTS_') || isPart3Section)) {
+      if (nextSection?.type === 'IELTS_PART1' || nextSection?.name?.toLowerCase().includes('part 1')) {
+        const part1Intro = `In this first part, I'd like to ask you some questions about yourself.`;
+        await this.sendChatMessage(roomName, `📢 **Part 1:** ${part1Intro}`);
+        questionTextToSpeak = `${part1Intro} ${nextQuestion}`;
+      } else if (nextSection?.type === 'IELTS_PART2' || nextSection?.name?.toLowerCase().includes('part 2')) {
+        const part2Intro = `Now, moving on to Part 2.`;
+        await this.sendChatMessage(roomName, `📢 **Part 2:** ${part2Intro}`);
+        part2IntroPrefix = part2Intro;
+      } else if (isPart3Section) {
+        const part3Intro = `Now, let's move on to Part 3. We've been talking about a topic, and I'd like to ask you some more general questions related to this.`;
+        await this.sendChatMessage(roomName, `📢 **Part 3:** ${part3Intro}`);
+        questionTextToSpeak = `${part3Intro} ${nextQuestion}`;
+
+        // Lock user transcript listening during transition and Q1 TTS
+        this.isBotSpeakingNextQuestion.set(roomName, true);
+      }
+    }
+
+    if (nextSection && (nextSection.type === 'IELTS_PART2' || nextSection.name?.toLowerCase().includes('part 2'))) {
+      const cueCardContent = nextQuestion;
+      await this.handlePart2QuestionStart(roomName, session.id, nextQuestionNumber, totalQuestions, nextSection, cueCardContent, part2IntroPrefix);
+    } else {
+      await this.sendChatMessage(roomName, `❓ **Question ${nextQuestionNumber}/${totalQuestions}:**\n${nextQuestion}`);
+      await this.agentService.sendTTS(roomName, questionTextToSpeak);
+
+      if (isPart3Section && isNewSection) {
+        // Unlock listening after TTS finishes reading Q1 of Part 3 (10s delay)
+        setTimeout(() => {
+          this.startSilenceTimer(roomName, session.id, nextQuestionNumber, totalQuestions);
+        }, 10000);
+      } else {
+        this.startSilenceTimer(roomName, session.id, nextQuestionNumber, totalQuestions);
+      }
+    }
   }
 
   private startSilenceTimer(
@@ -712,12 +965,16 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     questionNumber: number,
     totalQuestions: number,
     retryCount = 0,
+    isPart2 = false,
   ): void {
     this.clearSilenceTimer(roomName);
+    // Unlocks transcript listening when silence timer starts (meaning bot has finished reading question)
+    this.isBotSpeakingNextQuestion.delete(roomName);
+    const timeoutMs = isPart2 ? 25_000 : this.SILENCE_TIMEOUT_MS;
 
     const timer = setTimeout(async () => {
       this.silenceTimers.delete(roomName);
-      this.logger.warn(`[Silence] No answer for Q${questionNumber} in room ${roomName} after ${this.SILENCE_TIMEOUT_MS}ms — skipping`);
+      this.logger.warn(`[Silence] No answer for Q${questionNumber} in room ${roomName} after ${timeoutMs}ms — skipping`);
 
       try {
         const session = await this.sessionService.getSessionById(sessionId);
@@ -738,7 +995,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
           await this.agentService.sendTTS(roomName, repeatText);
           await this.sendChatMessage(roomName, `❓ **Question ${questionNumber}/${totalQuestions}:**\n${repeatText}`);
 
-          this.startSilenceTimer(roomName, sessionId, questionNumber, totalQuestions, retryCount + 1);
+          this.startSilenceTimer(roomName, sessionId, questionNumber, totalQuestions, retryCount + 1, isPart2);
           return;
         }
 
@@ -760,10 +1017,10 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       } catch (error: any) {
         this.logger.error(`[Silence] Error handling Q${questionNumber}:`, error.message);
       }
-    }, this.SILENCE_TIMEOUT_MS);
+    }, timeoutMs);
 
     this.silenceTimers.set(roomName, timer);
-    this.logger.log(`[Silence] Started 15s timer for Q${questionNumber} in room ${roomName}`);
+    this.logger.log(`[Silence] Started ${timeoutMs / 1000}s timer for Q${questionNumber} in room ${roomName}`);
   }
 
   private clearSilenceTimer(roomName: string): void {
@@ -878,6 +1135,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.answerDebounceTimers.delete(roomName);
     this.pendingTranscripts.delete(roomName);
     this.clearSilenceTimer(roomName);
+    this.clearPrepTimer(roomName);
+    this.clearSpeakingTimer(roomName);
     this.clearTemplateSelectionTimer(roomName);
     this.awaitingTemplateSelection.delete(roomName);
     this.roomSessionMap.delete(roomName);

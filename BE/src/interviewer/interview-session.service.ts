@@ -132,32 +132,44 @@ export class InterviewSessionService {
       const section = sections[i];
       let selected: string[];
 
-      // For the FIRST section only
-      if (i === 0) {
-        // Always include the fixed first question
-        const otherQuestions = section.questions.filter(q => q !== FIXED_FIRST_QUESTION);
-
-        // Select (questionsToSelect - 1) random questions from remaining
-        const randomOthers = this.randomSelectFromArray(
-          otherQuestions,
-          section.questionsToSelect - 1
+      if (section.type === 'IELTS_PART2') {
+        // Part 2 section contains a single Cue Card question
+        selected = section.questions.filter(Boolean).slice(0, 1);
+        if (selected.length === 0) {
+          selected = ['Describe a topic of your choice and speak about it for 1 to 2 minutes.'];
+        }
+        this.logger.log(`📌 IELTS Part 2 Section added: "${section.name}"`);
+      } else if (section.type === 'IELTS_PART1' || section.type === 'IELTS_PART3') {
+        // IELTS Part 1 or Part 3: select questions directly from defined list
+        selected = this.randomSelectFromArray(
+          section.questions.filter(Boolean),
+          section.questionsToSelect || 1
         );
+      } else if (i === 0) {
+        // For the FIRST standard section only: Always include fixed introduction question
+        const otherQuestions = section.questions.filter(q => q !== FIXED_FIRST_QUESTION);
+        const countToSelect = Math.max(0, (section.questionsToSelect || 1) - 1);
 
-        // Put the fixed question FIRST
+        const randomOthers = countToSelect > 0
+          ? this.randomSelectFromArray(otherQuestions, countToSelect)
+          : [];
+
         selected = [FIXED_FIRST_QUESTION, ...randomOthers];
-
         this.logger.log(`✅ First question locked: "${FIXED_FIRST_QUESTION}"`);
       } else {
         // For other sections, select randomly as usual
         selected = this.randomSelectFromArray(
-          section.questions,
-          section.questionsToSelect
+          section.questions.filter(Boolean),
+          section.questionsToSelect || 1
         );
       }
 
       selectedSections.push({
         sectionName: section.name,
         selectedQuestions: selected,
+        type: section.type || 'STANDARD',
+        prepTimeSeconds: section.prepTimeSeconds ?? 60,
+        speakingTimeSeconds: section.speakingTimeSeconds ?? 120,
       });
 
       flatQuestions.push(...selected);

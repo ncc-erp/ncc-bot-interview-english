@@ -23,6 +23,10 @@ export class EnhancedInterviewerService {
   }
 
   async generateGreeting(template: InterviewTemplate): Promise<string> {
+    if (template.type === 2) {
+      return `Welcome to the IELTS Speaking Test. When you are ready, please say "ready" to begin.`;
+    }
+
     if (!template.isAiGenerated) {
     // Check if using sections
     if (template.questionSections && template.questionSections.length > 0) {

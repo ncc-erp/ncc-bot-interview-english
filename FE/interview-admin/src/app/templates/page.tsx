@@ -62,6 +62,22 @@ export default function TemplateListPage() {
       ),
     },
     {
+      title: "Type",
+      dataIndex: "type",
+      width: 130,
+      align: "center" as const,
+      render: (type: number) => (
+        <Tag color={type === 2 ? "gold" : "blue"}>
+          {type === 2 ? "IELTS Speaking" : "Standard"}
+        </Tag>
+      ),
+      filters: [
+        { text: "Standard", value: 1 },
+        { text: "IELTS Speaking", value: 2 },
+      ],
+      onFilter: (value: any, record: InterviewTemplate) => (record.type ?? 1) === value,
+    },
+    {
       title: "Mode",
       dataIndex: "isAiGenerated",
       width: 120,

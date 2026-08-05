@@ -78,6 +78,13 @@ export default function InterviewTable({ data, loading, onView, pagination }: Pr
       title: "Total Score",
       dataIndex: "overallFeedback",
       render: (_: any, record: InterviewListItem) => {
+        if (record.overallFeedback?.ieltsBandScore !== undefined && record.overallFeedback?.ieltsBandScore !== null) {
+          return (
+            <Tag color="purple" style={{ fontWeight: 700, fontSize: 13, padding: "2px 10px" }}>
+              Band {record.overallFeedback.ieltsBandScore.toFixed(1)}
+            </Tag>
+          );
+        }
         const score = record.overallFeedback?.star ?? record.overallFeedback?.hrStar;
         if (score == null) return <span style={{ color: "#bbb" }}>--</span>;
         const color = score >= 4 ? "#52c41a" : score >= 3 ? "#faad14" : "#ff4d4f";

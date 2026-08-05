@@ -16,6 +16,8 @@ import {
   type GetInterviewsParams,
 } from "@/services/interviewService";
 
+import { getTemplates, type InterviewTemplate } from "@/services/templateService";
+
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
@@ -45,12 +47,21 @@ export default function InterviewListPage() {
   // ── Filter state ────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [templateFilter, setTemplateFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const [templates, setTemplates] = useState<InterviewTemplate[]>([]);
 
   const debouncedSearch = useDebounce(search, 400);
 
   // ── Stats state ─────────────────────────────────────────────────────────────
   const [stats, setStats] = useState<AdminStats | null>(null);
+
+  // ── Fetch templates list ────────────────────────────────────────────────────
+  useEffect(() => {
+    getTemplates()
+      .then(setTemplates)
+      .catch(() => {});
+  }, []);
 
   // ── Fetch list ───────────────────────────────────────────────────────────────
   const fetchList = useCallback(async () => {
@@ -62,6 +73,7 @@ export default function InterviewListPage() {
         limit: 10,
         search: debouncedSearch || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
+        templateId: templateFilter !== "all" ? templateFilter : undefined,
         dateFrom: dateRange?.[0]?.format("YYYY-MM-DD") ?? undefined,
         dateTo: dateRange?.[1]?.format("YYYY-MM-DD") ?? undefined,
       };
@@ -73,10 +85,10 @@ export default function InterviewListPage() {
     } finally {
       setListLoading(false);
     }
-  }, [page, debouncedSearch, statusFilter, dateRange]);
+  }, [page, debouncedSearch, statusFilter, templateFilter, dateRange]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, dateRange]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, templateFilter, dateRange]);
   useEffect(() => { fetchList(); }, [fetchList]);
 
   // ── Fetch settings ───────────────────────────────────────────────────────────
@@ -181,6 +193,19 @@ export default function InterviewListPage() {
               <Option value="in_progress">In Progress</Option>
               <Option value="pending">Pending</Option>
               <Option value="cancelled">Cancelled</Option>
+            </Select>
+            <Select
+              value={templateFilter}
+              onChange={setTemplateFilter}
+              style={{ minWidth: 200 }}
+              placeholder="All templates"
+            >
+              <Option value="all">All templates</Option>
+              {templates.map((t) => (
+                <Option key={t.id} value={t.id}>
+                  {t.name}
+                </Option>
+              ))}
             </Select>
             <RangePicker
               value={dateRange}

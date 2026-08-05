@@ -26,6 +26,7 @@ export interface AdminSessionListQuery {
   page?: number;
   limit?: number;
   status?: string;
+  templateId?: string;
   dateFrom?: string;
   dateTo?: string;
   search?: string;
@@ -40,8 +41,8 @@ export interface SessionListItemDto {
   durationSeconds: number | null;
   roomName: string | null;
   user: { id: string; username: string; mezonUserId: string } | null;
-  template: { id: string; name: string; numberOfQuestions: number } | null;
-  overallFeedback: { totalScore: number; star?: number; hrStar?: number } | null;
+  template: { id: string; name: string; type?: number; numberOfQuestions: number } | null;
+  overallFeedback: { totalScore?: number; star?: number; hrStar?: number; ieltsBandScore?: number } | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -94,6 +95,11 @@ export class AdminController {
       qb.andWhere('session.status = :status', { status: query.status });
     }
 
+    // Filter by template
+    if (query.templateId && query.templateId !== 'all') {
+      qb.andWhere('CAST(session.templateId AS TEXT) = :templateId', { templateId: query.templateId });
+    }
+
     // Filter by date range
     if (query.dateFrom) {
       qb.andWhere('session.startedAt >= :dateFrom', {
@@ -137,11 +143,17 @@ export class AdminController {
         ? {
           id: s.template.id,
           name: s.template.name,
+          type: s.template.type,
           numberOfQuestions: s.template.numberOfQuestions,
         }
         : null,
       overallFeedback: s.overallFeedback
-        ? { totalScore: s.overallFeedback.totalScore, star: s.overallFeedback.star, hrStar: s.overallFeedback.hrStar }
+        ? {
+          totalScore: s.overallFeedback.totalScore,
+          star: s.overallFeedback.star,
+          hrStar: s.overallFeedback.hrStar,
+          ieltsBandScore: s.overallFeedback.ieltsBandScore,
+        }
         : null,
     }));
 
@@ -211,11 +223,13 @@ export class AdminController {
 
     // 1. Run direct scoring (synchronously wait for API call)
     let evaluation;
+    const templateType = session.template?.type ?? 1;
     try {
       evaluation = await this.scoringService.scoreInterviewDirect(
         session.id,
         session.audioFile,
         questions,
+        templateType,
       );
     } catch (err: any) {
       if (err.response) {
@@ -235,22 +249,47 @@ export class AdminController {
     // 2. Save scores per question
     await this.sessionService.saveQuestionScores(session.id, evaluation.questionScores);
 
-    // 3. Compute overall score
-    const validScores = evaluation.questionScores.filter(s => s.score > 0);
-    let totalScore = 0;
-    if (validScores.length > 0) {
-      const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
-      totalScore = Math.round(avg * 10) / 10;
-    }
+    // 3. Update overall score and feedback
+    if (evaluation.isIelts && evaluation.ieltsData) {
+      const ielts = evaluation.ieltsData;
+      await this.sessionService.updateOverallScore(
+        session.id,
+        ielts.overall_band,
+        evaluation.star,
+        evaluation.starReason,
+        undefined,
+        {
+          ieltsBandScore: ielts.overall_band,
+          ieltsAverage: ielts.average,
+          ieltsCriteria: {
+            fluencyCoherence: ielts.fluency_coherence,
+            lexicalResource: ielts.lexical_resource,
+            grammarRangeAccuracy: ielts.grammatical_range_accuracy,
+            pronunciation: ielts.pronunciation,
+          },
+          ieltsCriterionFeedback: ielts.criterion_feedback,
+          ieltsWeaknesses: ielts.weaknesses,
+          ieltsEstimatedBandReason: ielts.estimated_band_reason,
+          strengths: ielts.strengths,
+          overall_feedback: ielts.overall_feedback,
+        },
+      );
+    } else {
+      const validScores = evaluation.questionScores.filter(s => s.score > 0);
+      let totalScore = 0;
+      if (validScores.length > 0) {
+        const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
+        totalScore = Math.round(avg * 10) / 10;
+      }
 
-    // 4. Update overall score and feedback
-    await this.sessionService.updateOverallScore(
-      session.id,
-      totalScore,
-      evaluation.star,
-      evaluation.starReason,
-      evaluation.criteria,
-    );
+      await this.sessionService.updateOverallScore(
+        session.id,
+        totalScore,
+        evaluation.star,
+        evaluation.starReason,
+        evaluation.criteria,
+      );
+    }
 
     // 5. Fetch updated session to return
     const updatedSession = await this.sessionRepo.findOne({

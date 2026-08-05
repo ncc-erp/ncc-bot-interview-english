@@ -91,6 +91,8 @@ export class AudioMergeCronService {
 
 			// Trigger scoring async — does not block audio delivery to user
       const questions = session.selectedQuestions || [];
+      const templateType = session.template?.type ?? 1;
+
       if (questions.length > 0) {
         this.scoringService.scoreInterview(
           session.id,
@@ -99,24 +101,54 @@ export class AudioMergeCronService {
           async (evaluation) => {
             await this.sessionService.saveQuestionScores(session.id, evaluation.questionScores);
 
-            // Overall score = average of questions that have answers (score > 0)
-            const validScores = evaluation.questionScores.filter(s => s.score > 0);
-            let totalScore = 0;
-            if (validScores.length > 0) {
-              const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
-              totalScore = Math.round(avg * 10) / 10;
+            if (evaluation.isIelts && evaluation.ieltsData) {
+              const ielts = evaluation.ieltsData;
+              await this.sessionService.updateOverallScore(
+                session.id,
+                ielts.overall_band,
+                evaluation.star,
+                evaluation.starReason,
+                undefined,
+                {
+                  ieltsBandScore: ielts.overall_band,
+                  ieltsAverage: ielts.average,
+                  ieltsCriteria: {
+                    fluencyCoherence: ielts.fluency_coherence,
+                    lexicalResource: ielts.lexical_resource,
+                    grammarRangeAccuracy: ielts.grammatical_range_accuracy,
+                    pronunciation: ielts.pronunciation,
+                  },
+                  ieltsCriterionFeedback: ielts.criterion_feedback,
+                  ieltsWeaknesses: ielts.weaknesses,
+                  ieltsEstimatedBandReason: ielts.estimated_band_reason,
+                  strengths: ielts.strengths,
+                  overall_feedback: ielts.overall_feedback,
+                },
+              );
+              this.logger.log(
+                `[Scoring IELTS] Overall Band: ${ielts.overall_band} for session ${session.id}`
+              );
+            } else {
+              // Standard Template scoring logic
+              const validScores = evaluation.questionScores.filter(s => s.score > 0);
+              let totalScore = 0;
+              if (validScores.length > 0) {
+                const avg = validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length;
+                totalScore = Math.round(avg * 10) / 10;
+              }
+              await this.sessionService.updateOverallScore(
+                session.id,
+                totalScore,
+                evaluation.star,
+                evaluation.starReason,
+                evaluation.criteria,
+              );
+              this.logger.log(
+                `[Scoring Standard] Overall score: ${totalScore}/10, star: ${evaluation.star}/5 for session ${session.id}`
+              );
             }
-            await this.sessionService.updateOverallScore(
-              session.id,
-              totalScore,
-              evaluation.star,
-              evaluation.starReason,
-              evaluation.criteria,
-            );
-            this.logger.log(
-              `[Scoring] Overall score: ${totalScore}/10, star: ${evaluation.star}/5 for session ${session.id}`
-            );
           },
+          templateType,
         ).catch(err => this.logger.error(`[Scoring] Async error:`, err.message));
       } else {
         this.logger.warn(`[Scoring] No questions found for session ${session.id}, skipping`);

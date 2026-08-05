@@ -29,6 +29,23 @@ export interface OverallFeedback {
     grammarVocabulary: string;
     confidence: string;
   };
+  // IELTS Band properties
+  ieltsBandScore?: number;
+  ieltsAverage?: number;
+  ieltsCriteria?: {
+    fluencyCoherence: number;
+    lexicalResource: number;
+    grammarRangeAccuracy: number;
+    pronunciation: number;
+  };
+  ieltsCriterionFeedback?: {
+    fluency?: string;
+    vocabulary?: string;
+    grammar?: string;
+    pronunciation?: string;
+  };
+  ieltsWeaknesses?: string[];
+  ieltsEstimatedBandReason?: string;
   hrStar?: number;
 }
 
@@ -68,7 +85,7 @@ export interface InterviewListItem {
   roomName: string | null;
   user: SessionUser | null;
   template: SessionTemplate | null;
-  overallFeedback: { totalScore: number; star?: number; hrStar?: number } | null;
+  overallFeedback: { totalScore?: number; star?: number; hrStar?: number; ieltsBandScore?: number } | null;
 }
 
 // Dùng cho chi tiết (đầy đủ)
@@ -100,6 +117,7 @@ export interface GetInterviewsParams {
   page?: number;
   limit?: number;
   status?: string;
+  templateId?: string;
   dateFrom?: string;
   dateTo?: string;
   search?: string;

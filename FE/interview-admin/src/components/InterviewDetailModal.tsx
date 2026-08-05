@@ -193,24 +193,7 @@ export default function InterviewDetailModal({ open, data, loading, onClose }: P
                   {data.overallFeedback.overall}
                 </div>
               )}
-              <div style={{ display: "flex", gap: 16 }}>
-                {data.overallFeedback.strengths?.length > 0 && (
-                  <div style={{ flex: 1 }}>
-                    <Text strong style={{ color: "#52c41a" }}>💪 Strengths</Text>
-                    <ul style={{ paddingLeft: 18, marginTop: 6, fontSize: 13 }}>
-                      {data.overallFeedback.strengths.map((s, i) => <li key={i}>{s}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {data.overallFeedback.improvements?.length > 0 && (
-                  <div style={{ flex: 1 }}>
-                    <Text strong style={{ color: "#fa8c16" }}>🎯 Areas to Improve</Text>
-                    <ul style={{ paddingLeft: 18, marginTop: 6, fontSize: 13 }}>
-                      {data.overallFeedback.improvements.map((s, i) => <li key={i}>{s}</li>)}
-                    </ul>
-                  </div>
-                )}
-              </div>
+
             </>
           )}
 

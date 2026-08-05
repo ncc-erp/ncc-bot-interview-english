@@ -290,7 +290,9 @@ export class ScoringService {
   private async scoreIeltsWithGemini(
     filePath: string,
     fileSize: number,
+    questions: string[],
   ): Promise<InterviewEvaluationResult> {
+    const apiKey = this.configService.get<string>('GOOGLE_API_KEY')!;
     const questionList = questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
 
     const prompt = [

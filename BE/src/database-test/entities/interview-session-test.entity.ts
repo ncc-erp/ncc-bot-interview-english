@@ -39,6 +39,23 @@ export interface OverallFeedbackDto {
     grammarVocabulary?: string;
     confidence?: string;
   };
+  // IELTS Speaking assessment properties
+  ieltsBandScore?: number;
+  ieltsAverage?: number;
+  ieltsCriteria?: {
+    fluencyCoherence: number;
+    lexicalResource: number;
+    grammarRangeAccuracy: number;
+    pronunciation: number;
+  };
+  ieltsCriterionFeedback?: {
+    fluency?: string;
+    vocabulary?: string;
+    grammar?: string;
+    pronunciation?: string;
+  };
+  ieltsWeaknesses?: string[];
+  ieltsEstimatedBandReason?: string;
   hrStar?: number;
 } 
 

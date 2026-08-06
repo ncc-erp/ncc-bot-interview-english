@@ -284,53 +284,94 @@ export default function InterviewDetailPage() {
             </div>
           </div>
 
-          {data.overallFeedback.criteria && (
-            <div style={{ marginBottom: 16, padding: "12px 16px", border: "1px solid #f0f0f0", borderRadius: 8, background: "#fafafa" }}>
-              <Text strong style={{ display: "block", marginBottom: 10, fontSize: 13 }}>Overall Communication Criteria:</Text>
-              <Space wrap size={[8, 12]}>
-                <Tag color={getCriteriaColor(data.overallFeedback.criteria.contentDepthAccuracy)}>
-                  Content Depth & Accuracy: <strong>{data.overallFeedback.criteria.contentDepthAccuracy}</strong>
-                </Tag>
-                <Tag color={getCriteriaColor(data.overallFeedback.criteria.fluencySpeakingFlow)}>
-                  Fluency & Speaking Flow: <strong>{data.overallFeedback.criteria.fluencySpeakingFlow}</strong>
-                </Tag>
-                <Tag color={getCriteriaColor(data.overallFeedback.criteria.pronunciationClarity)}>
-                  Pronunciation & Clarity: <strong>{data.overallFeedback.criteria.pronunciationClarity}</strong>
-                </Tag>
-                <Tag color={getCriteriaColor(data.overallFeedback.criteria.grammarVocabulary)}>
-                  Grammar & Vocabulary: <strong>{data.overallFeedback.criteria.grammarVocabulary}</strong>
-                </Tag>
-                <Tag color={getCriteriaColor(data.overallFeedback.criteria.confidence)}>
-                  Confidence: <strong>{data.overallFeedback.criteria.confidence}</strong>
-                </Tag>
-              </Space>
+          {/* Standard or IELTS Overall Display */}
+          {data.overallFeedback.ieltsBandScore !== undefined ? (
+            <div style={{ marginBottom: 20, padding: 16, background: "#f9f0ff", border: "1px solid #d3ade8", borderRadius: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12, display: "block" }}>IELTS SPEAKING SCORE</Text>
+                  <Tag color="purple" style={{ fontSize: 24, padding: "6px 16px", borderRadius: 6, fontWeight: 700 }}>
+                    Band {data.overallFeedback.ieltsBandScore.toFixed(1)}
+                  </Tag>
+                </div>
+                {data.overallFeedback.ieltsAverage !== undefined && (
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 12, display: "block" }}>RAW AVERAGE</Text>
+                    <Text strong style={{ fontSize: 18, color: "#722ed1" }}>
+                      {data.overallFeedback.ieltsAverage.toFixed(3)} / 9.0
+                    </Text>
+                  </div>
+                )}
+              </div>
+
+              {data.overallFeedback.ieltsCriteria && (
+                <div style={{ marginBottom: 16 }}>
+                  <Text strong style={{ display: "block", marginBottom: 8, fontSize: 13 }}>Band Score by Criteria (0.0 - 9.0):</Text>
+                  <Space direction="vertical" style={{ width: "100%" }}>
+                    {[
+                      ["Fluency & Coherence (FC)", data.overallFeedback.ieltsCriteria.fluencyCoherence, data.overallFeedback.ieltsCriterionFeedback?.fluency],
+                      ["Lexical Resource (LR)", data.overallFeedback.ieltsCriteria.lexicalResource, data.overallFeedback.ieltsCriterionFeedback?.vocabulary],
+                      ["Grammatical Range & Accuracy (GRA)", data.overallFeedback.ieltsCriteria.grammarRangeAccuracy, data.overallFeedback.ieltsCriterionFeedback?.grammar],
+                      ["Pronunciation (PR)", data.overallFeedback.ieltsCriteria.pronunciation, data.overallFeedback.ieltsCriterionFeedback?.pronunciation],
+                    ].map(([label, score, fb]) => (
+                      <div key={label as string} style={{ background: "#fff", padding: "8px 12px", borderRadius: 6, border: "1px solid #f0f0f0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <Text strong style={{ fontSize: 13 }}>{label}</Text>
+                          <Tag color="magenta">Band {(score as number).toFixed(1)}</Tag>
+                        </div>
+                        <Progress percent={Math.round(((score as number) / 9) * 100)} size="small" strokeColor="#722ed1" showInfo={false} />
+                        {fb && (
+                          <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                            {fb as string}
+                          </Text>
+                        )}
+                      </div>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {data.overallFeedback.ieltsEstimatedBandReason && (
+                <div style={{ padding: "10px 12px", background: "#fff", borderRadius: 6, borderLeft: "4px solid #722ed1", fontSize: 13 }}>
+                  <Text strong style={{ display: "block", color: "#722ed1", marginBottom: 4 }}>Examiner Overall Assessment:</Text>
+                  {data.overallFeedback.ieltsEstimatedBandReason}
+                </div>
+              )}
             </div>
+          ) : (
+            <>
+              {data.overallFeedback.criteria && (
+                <div style={{ marginBottom: 16, padding: "12px 16px", border: "1px solid #f0f0f0", borderRadius: 8, background: "#fafafa" }}>
+                  <Text strong style={{ display: "block", marginBottom: 10, fontSize: 13 }}>Overall Communication Criteria:</Text>
+                  <Space wrap size={[8, 12]}>
+                    <Tag color={getCriteriaColor(data.overallFeedback.criteria.contentDepthAccuracy)}>
+                      Content Depth & Accuracy: <strong>{data.overallFeedback.criteria.contentDepthAccuracy}</strong>
+                    </Tag>
+                    <Tag color={getCriteriaColor(data.overallFeedback.criteria.fluencySpeakingFlow)}>
+                      Fluency & Speaking Flow: <strong>{data.overallFeedback.criteria.fluencySpeakingFlow}</strong>
+                    </Tag>
+                    <Tag color={getCriteriaColor(data.overallFeedback.criteria.pronunciationClarity)}>
+                      Pronunciation & Clarity: <strong>{data.overallFeedback.criteria.pronunciationClarity}</strong>
+                    </Tag>
+                    <Tag color={getCriteriaColor(data.overallFeedback.criteria.grammarVocabulary)}>
+                      Grammar & Vocabulary: <strong>{data.overallFeedback.criteria.grammarVocabulary}</strong>
+                    </Tag>
+                    <Tag color={getCriteriaColor(data.overallFeedback.criteria.confidence)}>
+                      Confidence: <strong>{data.overallFeedback.criteria.confidence}</strong>
+                    </Tag>
+                  </Space>
+                </div>
+              )}
+
+              {data.overallFeedback.overall && (
+                <div style={{ marginBottom: 16, padding: "10px 12px", background: "#f0f8ff", borderRadius: 6, fontSize: 13 }}>
+                  {data.overallFeedback.overall}
+                </div>
+              )}
+            </>
           )}
 
-          {data.overallFeedback.overall && (
-            <div style={{ marginBottom: 16, padding: "10px 12px", background: "#f0f8ff", borderRadius: 6, fontSize: 13 }}>
-              {data.overallFeedback.overall}
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 24 }}>
-            {data.overallFeedback.strengths?.length > 0 && (
-              <div style={{ flex: 1 }}>
-                <Text strong style={{ color: "#52c41a" }}>💪 Strengths</Text>
-                <ul style={{ paddingLeft: 18, marginTop: 8, fontSize: 13 }}>
-                  {data.overallFeedback.strengths.map((s, i) => <li key={i}>{s}</li>)}
-                </ul>
-              </div>
-            )}
-            {data.overallFeedback.improvements?.length > 0 && (
-              <div style={{ flex: 1 }}>
-                <Text strong style={{ color: "#fa8c16" }}>🎯 Areas to Improve</Text>
-                <ul style={{ paddingLeft: 18, marginTop: 8, fontSize: 13 }}>
-                  {data.overallFeedback.improvements.map((s, i) => <li key={i}>{s}</li>)}
-                </ul>
-              </div>
-            )}
-          </div>
+          {/* End Overall Display */}
         </Card>
       )}
 

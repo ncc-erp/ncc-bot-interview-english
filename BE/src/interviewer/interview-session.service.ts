@@ -554,7 +554,7 @@ export class InterviewSessionService {
     questionNumber: number;
     question: string;
     answer: string;
-    criteria: {
+    criteria?: {
       relevance: number;
       contentDepth: number;
       fluency: number;
@@ -584,6 +584,26 @@ export class InterviewSessionService {
       grammarVocabulary: string;
       confidence: string;
     },
+    ieltsData?: {
+      ieltsBandScore?: number;
+      ieltsAverage?: number;
+      ieltsCriteria?: {
+        fluencyCoherence: number;
+        lexicalResource: number;
+        grammarRangeAccuracy: number;
+        pronunciation: number;
+      };
+      ieltsCriterionFeedback?: {
+        fluency?: string;
+        vocabulary?: string;
+        grammar?: string;
+        pronunciation?: string;
+      };
+      ieltsWeaknesses?: string[];
+      ieltsEstimatedBandReason?: string;
+      strengths?: string[];
+      overall_feedback?: string;
+    },
   ): Promise<void> {
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
@@ -592,19 +612,27 @@ export class InterviewSessionService {
 
     if (!session) return;
 
-    const updated = {
+    const updated: OverallFeedbackDto = {
       ...(session.overallFeedback || {}),
       totalScore,
       ...(star !== undefined ? { star } : {}),
       ...(starReason !== undefined ? { starReason } : {}),
       ...(criteria !== undefined ? { criteria } : {}),
+      ...(ieltsData?.ieltsBandScore !== undefined ? { ieltsBandScore: ieltsData.ieltsBandScore } : {}),
+      ...(ieltsData?.ieltsAverage !== undefined ? { ieltsAverage: ieltsData.ieltsAverage } : {}),
+      ...(ieltsData?.ieltsCriteria !== undefined ? { ieltsCriteria: ieltsData.ieltsCriteria } : {}),
+      ...(ieltsData?.ieltsCriterionFeedback !== undefined ? { ieltsCriterionFeedback: ieltsData.ieltsCriterionFeedback } : {}),
+      ...(ieltsData?.ieltsWeaknesses !== undefined ? { ieltsWeaknesses: ieltsData.ieltsWeaknesses, improvements: ieltsData.ieltsWeaknesses } : {}),
+      ...(ieltsData?.ieltsEstimatedBandReason !== undefined ? { ieltsEstimatedBandReason: ieltsData.ieltsEstimatedBandReason } : {}),
+      ...(ieltsData?.strengths !== undefined ? { strengths: ieltsData.strengths } : {}),
+      ...(ieltsData?.overall_feedback !== undefined ? { overall: ieltsData.overall_feedback } : {}),
     };
 
     await this.sessionRepo.update({ id: sessionId }, { overallFeedback: updated });
     this.logger.log(
-      `Updated overall score to ${totalScore}/10` +
-      (star !== undefined ? `, star to ${star}/5` : '') +
-      ` for session ${sessionId}`
+      `Updated overall score for session ${sessionId}: score=${totalScore}` +
+      (star !== undefined ? `, star=${star}` : '') +
+      (ieltsData?.ieltsBandScore !== undefined ? `, ieltsBand=${ieltsData.ieltsBandScore}` : '')
     );
   }
 
@@ -664,6 +692,7 @@ export class InterviewSessionService {
   async findSessionsNeedMergedAudio(): Promise<InterviewSession[]> {
     return this.sessionRepo
       .createQueryBuilder("s")
+      .leftJoinAndSelect("s.template", "template")
       .where("s.status IN (:...statuses)", {
         statuses: [SessionStatus.FINISHED_SESSION],
       })

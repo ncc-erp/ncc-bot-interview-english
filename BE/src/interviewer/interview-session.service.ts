@@ -692,6 +692,7 @@ export class InterviewSessionService {
   async findSessionsNeedMergedAudio(): Promise<InterviewSession[]> {
     return this.sessionRepo
       .createQueryBuilder("s")
+      .leftJoinAndSelect("s.template", "template")
       .where("s.status IN (:...statuses)", {
         statuses: [SessionStatus.FINISHED_SESSION],
       })

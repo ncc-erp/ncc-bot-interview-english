@@ -321,7 +321,7 @@ export default function InterviewDetailPage() {
                         </div>
                         <Progress percent={Math.round(((score as number) / 9) * 100)} size="small" strokeColor="#722ed1" showInfo={false} />
                         {fb && (
-                          <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                          <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                             {fb as string}
                           </Text>
                         )}

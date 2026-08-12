@@ -187,7 +187,7 @@ export default function CandidateResultPage() {
                           <Tag color="magenta">Band {(score as number).toFixed(1)}</Tag>
                         </div>
                         {fb && (
-                          <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                          <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                             {fb as string}
                           </Text>
                         )}

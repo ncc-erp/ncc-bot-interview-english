@@ -12,6 +12,7 @@ services:
       - REDIS_PORT=6379
       - MEZON_TOKEN=${MEZON_TOKEN}
       - MEZON_BOT_ID=${MEZON_BOT_ID}
+      - MEZON_AGENT_ID=${MEZON_AGENT_ID}
       - AGENT_BASE_URL=${AGENT_BASE_URL}
     depends_on:
       - redis

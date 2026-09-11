@@ -91,11 +91,11 @@ export class AgentService {
   async enableTranscript(roomName: string): Promise<void> {
     try {
       const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
-      const agentId = this.roomAgents.get(roomName);
+      const agentId = this.roomAgents.get(roomName) || this.configService.get<string>('MEZON_AGENT_ID');
       this.logger.log(`🎙️ Enabling transcript for room ${roomName}...`);
       await this.axiosClient.getInstance().post(`${baseurl}/api/v2/dispatch/agent-request`, {
         room_name: roomName,
-        agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+        agent_id: agentId,
         payload: { request_type: 'transcript_control', action: 'enable' },
       });
       this.logger.log(`✅ Transcript enabled for room ${roomName}`);
@@ -111,11 +111,11 @@ export class AgentService {
   async disableTranscript(roomName: string): Promise<void> {
     try {
       const baseurl = this.configService.get<string>('AGENT_BASE_URL')!;
-      const agentId = this.roomAgents.get(roomName);
+      const agentId = this.roomAgents.get(roomName) || this.configService.get<string>('MEZON_AGENT_ID');
       this.logger.log(`🔇 Disabling transcript for room ${roomName}...`);
       await this.axiosClient.getInstance().post(`${baseurl}/api/v2/dispatch/agent-request`, {
         room_name: roomName,
-        agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+        agent_id: agentId,
         payload: { request_type: 'transcript_control', action: 'disable' },
       });
       this.logger.log(`✅ Transcript disabled for room ${roomName}`);
@@ -654,8 +654,8 @@ Type your answer or speak in the voice room...`;
    */
   async sendTTS(roomName: string, text: string): Promise<void> {
     try {
-      const agentId = this.roomAgents.get(roomName);
-      await this.ttsService.callTTSAPI(roomName, text, 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d');
+      const agentId = this.roomAgents.get(roomName) || this.configService.get<string>('MEZON_AGENT_ID');
+      await this.ttsService.callTTSAPI(roomName, text, agentId);
       this.logger.log(`[TTS SENT] Room ${roomName}: ${text.substring(0, 100)}...`);
     } catch (error) {
       this.logger.error(`Failed to send TTS for room ${roomName}:`, error);

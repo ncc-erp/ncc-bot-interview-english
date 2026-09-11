@@ -9,6 +9,7 @@ export const envValidationSchema = Joi.object({
 
   MEZON_TOKEN: Joi.string().required(),
   MEZON_BOT_ID: Joi.string().required(),
+  MEZON_AGENT_ID: Joi.string().optional(),
 
   OPENAI_API_KEY: Joi.string().optional(),
 

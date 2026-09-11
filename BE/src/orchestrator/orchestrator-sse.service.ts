@@ -393,7 +393,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const participants = await this.getRoomParticipants(roomId);
+    const participants = await this.getRoomParticipants(roomId, roomName);
     const starterParticipant = participants.find((participant) =>
       this.isMatchingParticipant(participant, participantIdentity),
     );
@@ -401,15 +401,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
     if (!isStarterInRoom) {
       this.logger.warn(
-        `[Start] Participant ${participantIdentity} not found in room ${roomName} (${roomId})`
+        `[Start] Participant ${participantIdentity} not found in room ${roomName} (${roomId}). Active participants in room (${participants.length}): ${JSON.stringify(participants)}. Proceeding with fallback.`
       );
-      await this.sendChatMessage(
-        roomName,
-        '❌ Could not verify that you are in this room. Please rejoin the room and try again.'
-      );
-      return;
     }
-    const starterDisplayName = this.getParticipantDisplayName(starterParticipant, participantIdentity);
+    const starterDisplayName = starterParticipant
+      ? this.getParticipantDisplayName(starterParticipant, participantIdentity)
+      : participantIdentity;
 
     // Check if already active session for this room
     const existing = await this.sessionService.getSessionByRoomName(roomName);
@@ -1076,7 +1073,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         `${baseUrl}/api/v2/dispatch/agent-request`,
         {
           room_name: roomName,
-          agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+          agent_id: agentId || this.configService.get<string>('MEZON_AGENT_ID'),
           payload: {
             request_type: 'send_chat_message',
             message: text,
@@ -1089,19 +1086,33 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async getRoomParticipants(roomId: string): Promise<any[]> {
+  private async getRoomParticipants(roomId: string, roomName?: string): Promise<any[]> {
     const baseUrl = this.configService.get<string>('AGENT_BASE_URL')!;
-    const url = `${baseUrl}/api/v2/rooms/participant/${encodeURIComponent(roomId)}`;
 
-    const response = await this.axiosClient.getInstance().get(url);
-    const data = response.data;
+    // Attempt 1: Query by roomId
+    try {
+      const url = `${baseUrl}/api/v2/rooms/participant/${encodeURIComponent(roomId)}`;
+      const response = await this.axiosClient.getInstance().get(url);
+      const data = response.data;
+      const list = Array.isArray(data) ? data : (data?.participants || data?.data || data?.data?.participants);
+      if (Array.isArray(list) && list.length > 0) return list;
+    } catch (e: any) {
+      this.logger.debug(`[Participants] Fetch failed for roomId ${roomId}: ${e.message}`);
+    }
 
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.participants)) return data.participants;
-    if (Array.isArray(data?.data)) return data.data;
-    if (Array.isArray(data?.data?.participants)) return data.data.participants;
+    // Attempt 2: Query by roomName
+    if (roomName && roomName !== roomId) {
+      try {
+        const url = `${baseUrl}/api/v2/rooms/participant/${encodeURIComponent(roomName)}`;
+        const response = await this.axiosClient.getInstance().get(url);
+        const data = response.data;
+        const list = Array.isArray(data) ? data : (data?.participants || data?.data || data?.data?.participants);
+        if (Array.isArray(list) && list.length > 0) return list;
+      } catch (e: any) {
+        this.logger.debug(`[Participants] Fetch failed for roomName ${roomName}: ${e.message}`);
+      }
+    }
 
-    this.logger.warn(`[Participants] Unexpected response format for room ${roomId}`);
     return [];
   }
 
@@ -1109,12 +1120,28 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const target = String(participantIdentity || '').trim();
     if (!target) return false;
 
-    const identity = String(participant?.identity || '').trim();
-    const participantIdentityField = String(participant?.participant_identity || '').trim();
-    const extName = String(participant?.metadata?.extName || '').trim();
-    const extId = String(participant?.metadata?.extId || '').trim();
+    let metadata = participant?.metadata;
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {}
+    }
 
-    return [identity, participantIdentityField, extName, extId].includes(target);
+    const candidates = [
+      String(participant?.identity || '').trim(),
+      String(participant?.participant_identity || '').trim(),
+      String(participant?.user_id || '').trim(),
+      String(participant?.userId || '').trim(),
+      String(participant?.ext_id || '').trim(),
+      String(participant?.extId || '').trim(),
+      String(participant?.id || '').trim(),
+      String(metadata?.extName || '').trim(),
+      String(metadata?.extId || '').trim(),
+      String(metadata?.user_id || '').trim(),
+      String(metadata?.userId || '').trim(),
+    ].filter(Boolean);
+
+    return candidates.some((cand) => cand === target || cand.includes(target) || target.includes(cand));
   }
 
   private getParticipantDisplayName(participant: any, fallback: string): string {

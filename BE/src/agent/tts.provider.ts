@@ -31,7 +31,7 @@ export class TTSProvider {
  
     const payload = {
       room_name: roomName,
-      agent_id: 'agent-e7e1b7c2-2b6e-4e2a-9c1d-7f8e2a1b2c3d',
+      agent_id: agentId || this.configService.get<string>('MEZON_AGENT_ID'),
       payload: {
         request_type: "tts_play",
         text,

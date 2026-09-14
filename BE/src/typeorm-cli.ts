@@ -10,6 +10,7 @@ export default new DataSource({
   username: process.env.DB_USERNAME || 'postgres',
   password: process.env.DB_PASSWORD || '2982003',
   database: process.env.DB_NAME || 'interview_bot_test',
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
   entities: [
     'src/database-test/entities/*.entity.ts', 
   ],

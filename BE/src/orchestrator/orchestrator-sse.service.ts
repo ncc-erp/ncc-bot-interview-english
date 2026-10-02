@@ -83,16 +83,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Log an audit event with exact timestamp and save to room's audit stream
+   * Log an audit event with exact timestamp and save to room's audit stream (file only)
    */
   public logAudit(roomName: string, tag: string, message: string, details?: any): void {
     const timestamp = new Date().toISOString();
     const entry: AuditLogEntry = { timestamp, tag, message, details };
-
-    const detailStr = details
-      ? ` | Data: ${typeof details === 'string' ? details : JSON.stringify(details)}`
-      : '';
-    this.logger.log(`[AUDIT][${roomName}][${tag}] ${message}${detailStr}`);
 
     const logs = this.sessionAuditLogs.get(roomName) || [];
     logs.push(entry);
@@ -112,23 +107,23 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     try {
       const header = [
         '================================================================================',
-        '🎙️ NCC INTERVIEW BOT - DETAILED SESSION AUDIT LOG',
+        '🎙️ NCC INTERVIEW BOT - FULL AUDIT LOG FOR ANALYSIS',
         `Room Name:     ${roomName}`,
         `Session ID:    ${sessionId || 'N/A'}`,
         `Generated At:  ${new Date().toISOString()}`,
         `Total Events:  ${logs.length}`,
         '================================================================================\n',
-        'TIMELINE OF EVENTS (Agent SSE Streams, User Transcripts, Debounce & TTS):',
+        'TIMELINE OF EVENTS (Agent Transcripts, Debounce Logic, AI Responses & Bot TTS):',
         '--------------------------------------------------------------------------------',
       ];
 
       const lines = logs.map((log) => {
-        let line = `[${log.timestamp}] [${log.tag.padEnd(24, ' ')}] ${log.message}`;
+        let line = `[${log.timestamp}] [${log.tag.padEnd(26, ' ')}] ${log.message}`;
         if (log.details !== undefined) {
           const formatted = typeof log.details === 'string'
             ? log.details
             : JSON.stringify(log.details, null, 2);
-          line += `\n    └─ Details: ${formatted.replace(/\n/g, '\n       ')}`;
+          line += `\n    └─ Data: ${formatted.replace(/\n/g, '\n       ')}`;
         }
         return line;
       });
@@ -620,33 +615,52 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     };
 
     es.onmessage = (event) => {
+      const rawData = event.data;
       try {
-        const parsed = JSON.parse(event.data);
-        const identity = parsed.participant_identity || '';
+        const parsed = JSON.parse(rawData);
+        const identity = parsed.participant_identity || parsed.identity || parsed.user_id || '';
+        const msgType = parsed.type || parsed.event || parsed.event_type || 'UNKNOWN';
+        const msgText = parsed.message || parsed.text || parsed.transcript || '';
 
-        // Ignore bot's own speech
-        if (identity.startsWith('agent-')) return;
+        // Check if message is from bot itself (echo / agent speech)
+        if (identity && (identity.startsWith('agent-') || identity.includes('agent-'))) {
+          this.logAudit(roomName, 'AGENT_ECHO_IGNORED', `Agent self-speech: "${msgText}"`, {
+            raw_event_data: rawData,
+            parsed,
+          });
+          return;
+        }
 
-        if (parsed.type === 'PARTIAL') {
-          this.logAudit(roomName, 'SSE_STREAM_PARTIAL', `PARTIAL speech: "${parsed.message || ''}"`, {
-            participant: identity,
-            is_final: parsed.is_final,
+        if (msgType === 'PARTIAL') {
+          this.logAudit(roomName, 'AGENT_RAW_PARTIAL', `[PARTIAL] "${msgText}"`, {
+            raw_event_data: rawData,
+            parsed_payload: parsed,
           });
           this.resetDebounce(roomName, sessionId);
           this.clearSilenceTimer(roomName);
           return;
         }
 
-        if (parsed.type === 'FINAL') {
-          this.logAudit(roomName, 'SSE_STREAM_FINAL', `FINAL chunk: "${parsed.message || ''}"`, {
-            participant: identity,
-            raw: parsed,
+        if (msgType === 'FINAL') {
+          this.logAudit(roomName, 'AGENT_RAW_FINAL', `[FINAL] "${msgText}"`, {
+            raw_event_data: rawData,
+            parsed_payload: parsed,
           });
-          this.handleFinalTranscript(roomName, sessionId, parsed.message);
+          this.handleFinalTranscript(roomName, sessionId, msgText);
+          return;
         }
-      } catch {
-        this.logger.warn(`[Transcript SSE][${roomName}] Failed to parse: ${event.data}`);
-        this.logAudit(roomName, 'SSE_STREAM_PARSE_ERR', `Failed to parse transcript event: ${event.data}`);
+
+        // Any other event types returned from voice agent (e.g., VAD, metadata, custom payload)
+        this.logAudit(roomName, 'AGENT_RAW_OTHER_EVENT', `[OTHER TYPE: ${msgType}] "${msgText}"`, {
+          raw_event_data: rawData,
+          parsed_payload: parsed,
+        });
+      } catch (err: any) {
+        this.logger.warn(`[Transcript SSE][${roomName}] Non-JSON or Unparsed Event: ${rawData}`);
+        this.logAudit(roomName, 'AGENT_RAW_UNPARSED', `Raw SSE Frame: ${rawData}`, {
+          raw_event_data: rawData,
+          parse_error: err.message,
+        });
       }
     };
 
@@ -1246,6 +1260,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async sendChatMessage(roomName: string, text: string, isSendNoti: boolean = false): Promise<void> {
+    this.logAudit(roomName, 'BOT_SEND_CHAT', `Bot sent chat message: "${text}"`, { text, isSendNoti });
+
     if (!this.isChatEnabled() && !isSendNoti) return;
 
     try {
@@ -1265,6 +1281,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       );
     } catch (error: any) {
       this.logger.error(`Failed to send chat message to room ${roomName}:`, error.message);
+      this.logAudit(roomName, 'BOT_SEND_CHAT_ERROR', `Failed to send chat message: ${error.message}`);
     }
   }
 
@@ -1354,6 +1371,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
   private async handleRepeatQuestionRequest(roomName: string, participantIdentity: string): Promise<void> {
     try {
+      this.logAudit(roomName, 'REPEAT_REQUEST_COMMAND', `User ${participantIdentity} requested repeat question via chat command`);
       const session = await this.sessionService.findSessionByUserAndRoom(participantIdentity, roomName);
       if (!session) {
         this.logger.warn(`[Repeat] No active session found for user ${participantIdentity} in room ${roomName}`);
@@ -1365,10 +1383,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const repeatText = await getRepeatText(session, this.interviewerService);
       if (session.currentQuestionIndex === 0) {
         await this.sendChatMessage(roomName, `I didn't catch that. Let me repeat the greeting.`);
+        this.logAudit(roomName, 'BOT_SEND_TTS_REPEAT_GREETING', `Repeating greeting: "${repeatText}"`);
         await this.agentService.sendTTS(roomName, repeatText);
         await this.sendChatMessage(roomName, `🤖 ${repeatText}`);
       } else {
         await this.sendChatMessage(roomName, `Let me repeat the question.`);
+        this.logAudit(roomName, 'BOT_SEND_TTS_REPEAT_QUESTION', `Repeating Q${session.currentQuestionIndex}: "${repeatText}"`);
         await this.agentService.sendTTS(roomName, repeatText);
         await this.sendChatMessage(roomName, `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);
 

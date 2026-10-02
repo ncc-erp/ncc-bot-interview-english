@@ -1,21 +1,15 @@
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ncc-bot-interview-english
+  postgres:
+    image: postgres:15-alpine
+    container_name: ncc-bot-postgres
     ports:
-      - "3000:3000"
+      - "8104:5432"
     environment:
-      - NODE_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MEZON_TOKEN=${MEZON_TOKEN}
-      - MEZON_BOT_ID=${MEZON_BOT_ID}
-      - MEZON_AGENT_ID=${MEZON_AGENT_ID}
-      - AGENT_BASE_URL=${AGENT_BASE_URL}
-    depends_on:
-      - redis
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123qwe
+      - POSTGRES_DB=ncc_bot_interview
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
       - app-network
@@ -32,19 +26,9 @@ services:
     networks:
       - app-network
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: ncc-bot-postgres
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=12345678
-      - POSTGRES_DB=bot_interview
-
 volumes:
+  postgres-data:
   redis-data:
-
 
 networks:
   app-network:

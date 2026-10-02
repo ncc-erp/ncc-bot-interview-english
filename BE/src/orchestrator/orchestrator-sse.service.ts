@@ -13,6 +13,14 @@ import { EventSourcePolyfill } from 'event-source-polyfill';
 import { BotAuthService } from '@/auth/bot-auth.service';
 import { InterviewTemplate } from '@/database-test/entities/interview-template.entity';
 import { isRepeatRequest, isStartRequest, getRepeatText } from '@/shared/utils/interview';
+import { MinioService } from '@/record-audio/minio.service';
+
+interface AuditLogEntry {
+  timestamp: string;
+  tag: string;
+  message: string;
+  details?: any;
+}
 
 @Injectable()
 export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
@@ -24,6 +32,9 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
   // Per-room transcript SSE: room_name → EventSource
   private readonly transcriptSSEs = new Map<string, EventSource>();
+
+  // Audit Logs in memory per room: room_name → AuditLogEntry[]
+  private readonly sessionAuditLogs = new Map<string, AuditLogEntry[]>();
 
   // Retry timers
   private metadataRetryTimer: NodeJS.Timeout | null = null;
@@ -66,8 +77,74 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     private readonly templateService: TemplateService,
     private readonly axiosClient: AxiosClient,
     private readonly botAuthService: BotAuthService,
+    private readonly minioService: MinioService,
   ) {
     this.logger.log('SSE Service instance created');
+  }
+
+  /**
+   * Log an audit event with exact timestamp and save to room's audit stream
+   */
+  public logAudit(roomName: string, tag: string, message: string, details?: any): void {
+    const timestamp = new Date().toISOString();
+    const entry: AuditLogEntry = { timestamp, tag, message, details };
+
+    const detailStr = details
+      ? ` | Data: ${typeof details === 'string' ? details : JSON.stringify(details)}`
+      : '';
+    this.logger.log(`[AUDIT][${roomName}][${tag}] ${message}${detailStr}`);
+
+    const logs = this.sessionAuditLogs.get(roomName) || [];
+    logs.push(entry);
+    this.sessionAuditLogs.set(roomName, logs);
+  }
+
+  /**
+   * Upload all accumulated audit logs for this room/session to MinIO
+   */
+  public async uploadAuditLog(roomName: string, sessionId?: string): Promise<string | null> {
+    const logs = this.sessionAuditLogs.get(roomName);
+    if (!logs || logs.length === 0) {
+      this.logger.log(`[AUDIT][${roomName}] No audit logs recorded for upload.`);
+      return null;
+    }
+
+    try {
+      const header = [
+        '================================================================================',
+        '🎙️ NCC INTERVIEW BOT - DETAILED SESSION AUDIT LOG',
+        `Room Name:     ${roomName}`,
+        `Session ID:    ${sessionId || 'N/A'}`,
+        `Generated At:  ${new Date().toISOString()}`,
+        `Total Events:  ${logs.length}`,
+        '================================================================================\n',
+        'TIMELINE OF EVENTS (Agent SSE Streams, User Transcripts, Debounce & TTS):',
+        '--------------------------------------------------------------------------------',
+      ];
+
+      const lines = logs.map((log) => {
+        let line = `[${log.timestamp}] [${log.tag.padEnd(24, ' ')}] ${log.message}`;
+        if (log.details !== undefined) {
+          const formatted = typeof log.details === 'string'
+            ? log.details
+            : JSON.stringify(log.details, null, 2);
+          line += `\n    └─ Details: ${formatted.replace(/\n/g, '\n       ')}`;
+        }
+        return line;
+      });
+
+      const fullLogContent = [...header, ...lines, '\n============================== END OF AUDIT LOG ==============================\n'].join('\n');
+
+      const url = await this.minioService.uploadSessionLog(sessionId || 'room', fullLogContent, roomName);
+
+      this.logger.log(`\n================================================================================\n🔗 SESSION AUDIT LOG SAVED TO MINIO:\n👉 ${url}\n================================================================================\n`);
+
+      this.sessionAuditLogs.delete(roomName);
+      return url;
+    } catch (error: any) {
+      this.logger.error(`[AUDIT][${roomName}] Failed to upload audit log to MinIO: ${error.message}`);
+      return null;
+    }
   }
 
   async onModuleInit() {
@@ -144,6 +221,9 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const roomId = data.room?.room_id;
 
     this.logger.log(`[Metadata] event_type=${eventType} room=${roomName}`);
+    if (roomName) {
+      this.logAudit(roomName, 'METADATA_EVENT', `event_type=${eventType}`, data);
+    }
 
     if (roomName && roomId) {
       this.roomIds.set(roomName, roomId);
@@ -171,9 +251,14 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     const transcriptSSE = this.transcriptSSEs.get(roomName);
     const session = await this.sessionService.getSessionByRoomName(roomName);
     this.logger.log(`Session for room ${roomName}: ${session ? session.status : 'not found'}`);
+    this.logAudit(roomName, 'ROOM_ENDED', `Room ended on Agent server. Status: ${session ? session.status : 'not found'}`);
+
     if (session && session.status === SessionStatus.COMPLETED) {
       await this.sessionService.endSession(session.id);
     }
+
+    // Upload full session audit log to MinIO on room end
+    await this.uploadAuditLog(roomName, session?.id);
 
     if (transcriptSSE) {
       transcriptSSE.close();
@@ -260,6 +345,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     if (identity.startsWith(botId) || identity.includes('agent-')) return;
 
     this.logger.log(`[ChatExternal] room=${roomName} identity=${identity} msg="${message}"`);
+    this.logAudit(roomName, 'CHAT_EXTERNAL_MSG', `Received message from ${identity}: "${message}"`, data);
 
     // Parse commands
     if (message === '*templates') {
@@ -300,6 +386,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   private async handleStartCommand(roomName: string, participantIdentity: string, message: string): Promise<void> {
     try {
       this.logger.log(`🚀 *start from ${participantIdentity} in room ${roomName} (msg: "${message}")`);
+      this.logAudit(roomName, 'COMMAND_START', `User initiated *start: "${message}"`, { participantIdentity });
 
       const templates = await this.templateService.getActiveTemplates();
       if (!templates.length) {
@@ -433,6 +520,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
     await this.sessionService.startSession(session.id);
     this.logger.log(`✅ Session ${session.id} created for room ${roomName}`);
+    this.logAudit(roomName, 'INTERVIEW_START', `Session created & started for candidate: ${starterDisplayName}`, {
+      sessionId: session.id,
+      template: selectedTemplate.name,
+      totalQuestions: selectedTemplate.numberOfQuestions,
+    });
 
     // Invite agent first to avoid long AI greeting delays before bot joins room
     await this.agentService.handleInviteAgentExternal(roomName, session.id);
@@ -440,9 +532,16 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.subscribeTranscript(roomName, session.id);
 
     // Generate and send greeting
+    const t0 = Date.now();
     const greeting = await this.interviewerService.generateGreeting(selectedTemplate);
+    const greetingDuration = Date.now() - t0;
 
     await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, greeting, MessageType.TEXT);
+
+    this.logAudit(roomName, 'BOT_TTS_GREETING', `Greeting generated in ${greetingDuration}ms and dispatched to Agent TTS`, {
+      greeting,
+      durationMs: greetingDuration,
+    });
 
     await this.agentService.sendTTS(roomName, greeting);
     await this.sendChatMessage(roomName, `🤖 ${greeting}`);
@@ -452,6 +551,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
   private async handleStopCommand(roomName: string, participantIdentity: string): Promise<void> {
     try {
+      this.logAudit(roomName, 'COMMAND_STOP', `Stop command received from ${participantIdentity}`);
       const session = await this.sessionService.findSessionByUserAndRoom(participantIdentity, roomName);
       if (!session) {
         await this.sendChatMessage(roomName, '⚠️ No active interview session found.');
@@ -464,6 +564,9 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       await this.sendChatMessage(roomName, '🛑 Interview session cancelled.');
       this.logger.log(`Session ${session.id} cancelled by ${participantIdentity}`);
+
+      // Upload audit log to MinIO on stop
+      await this.uploadAuditLog(roomName, session.id);
     } catch (error) {
       this.logger.error(`Error in handleStopCommand:`, error);
     }
@@ -471,6 +574,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
   private async handleEndCommand(roomName: string, participantIdentity: string): Promise<void> {
     try {
+      this.logAudit(roomName, 'COMMAND_END', `End command received from ${participantIdentity}`);
       const session = await this.sessionService.findSessionByUserAndRoom(participantIdentity, roomName);
       if (!session) {
         await this.sendChatMessage(roomName, '⚠️ No active interview session found.');
@@ -486,6 +590,9 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.closeTranscriptForRoom(roomName);
 
       this.logger.log(`✅ Session ${session.id} ended by ${participantIdentity} in room ${roomName}`);
+
+      // Upload audit log to MinIO on end
+      await this.uploadAuditLog(roomName, session.id);
     } catch (error: any) {
       this.logger.error(`Error in handleEndCommand:`, error);
       await this.sendChatMessage(roomName, `❌ Failed to end session: ${error.message}`);
@@ -509,6 +616,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
     es.onopen = () => {
       this.logger.log(`✅ Transcript SSE connected for room ${roomName}`);
+      this.logAudit(roomName, 'TRANSCRIPT_SSE_OPEN', 'Connected to Agent transcript SSE stream');
     };
 
     es.onmessage = (event) => {
@@ -520,21 +628,31 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         if (identity.startsWith('agent-')) return;
 
         if (parsed.type === 'PARTIAL') {
+          this.logAudit(roomName, 'SSE_STREAM_PARTIAL', `PARTIAL speech: "${parsed.message || ''}"`, {
+            participant: identity,
+            is_final: parsed.is_final,
+          });
           this.resetDebounce(roomName, sessionId);
           this.clearSilenceTimer(roomName);
           return;
         }
 
         if (parsed.type === 'FINAL') {
+          this.logAudit(roomName, 'SSE_STREAM_FINAL', `FINAL chunk: "${parsed.message || ''}"`, {
+            participant: identity,
+            raw: parsed,
+          });
           this.handleFinalTranscript(roomName, sessionId, parsed.message);
         }
       } catch {
         this.logger.warn(`[Transcript SSE][${roomName}] Failed to parse: ${event.data}`);
+        this.logAudit(roomName, 'SSE_STREAM_PARSE_ERR', `Failed to parse transcript event: ${event.data}`);
       }
     };
 
     es.onerror = async () => {
       this.logger.error(`[Transcript SSE][${roomName}] Error`);
+      this.logAudit(roomName, 'TRANSCRIPT_SSE_ERR', `Transcript SSE error. Reconnect attempt ${retry + 1}/5`);
       es.close();
       this.transcriptSSEs.delete(roomName);
       this.authToken = await this.botAuthService.getValidAccessToken();
@@ -591,9 +709,16 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     // Trigger notification 5s before actual time-up to compensate for TTS latency
     const effectiveSpeakingTimerMs = Math.max(5, speakingSeconds - 5) * 1000;
 
+    this.logAudit(roomName, 'PART2_SPEAKING_START', `Started ${speakingSeconds}s speaking timer for Q${questionNumber}`, {
+      questionNumber,
+      speakingSeconds,
+      timerMs: effectiveSpeakingTimerMs,
+    });
+
     const timer = setTimeout(async () => {
       this.speakingTimers.delete(roomName);
       this.logger.log(`[Part 2] Speaking time limit reached (triggered 5s early at ${effectiveSpeakingTimerMs / 1000}s) for Q${questionNumber} in room ${roomName}`);
+      this.logAudit(roomName, 'PART2_SPEAKING_TIME_UP', `Part 2 speaking time expired for Q${questionNumber}`);
 
       // Lock transcript listening immediately to ignore late Part 2 speech & transition noise
       this.isBotSpeakingNextQuestion.set(roomName, true);
@@ -672,12 +797,18 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.isPrepPhase.set(roomName, true);
     this.clearPrepTimer(roomName);
 
+    this.logAudit(roomName, 'PART2_PREP_START', `Started ${prepSeconds}s prep phase for Q${questionNumber}`, {
+      cueCardTopic: cueCardContent,
+      prepSeconds,
+    });
+
     // 4. Add 5s buffer to preparation timer for TTS speech time and network latency
     const totalPrepTimerMs = (prepSeconds + 5) * 1000;
 
     const timer = setTimeout(async () => {
       this.prepTimers.delete(roomName);
       this.isPrepPhase.delete(roomName);
+      this.logAudit(roomName, 'PART2_PREP_TIMEOUT', `Preparation time expired for Q${questionNumber}`);
 
       const startSpeakingMsg = `🔔 Preparation time is up. Please start speaking now!`;
       await this.sendChatMessage(roomName, startSpeakingMsg);
@@ -699,6 +830,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
     if (this.isBotSpeakingNextQuestion.get(roomName)) {
       this.logger.log(`[Transcript][${roomName}] Ignored while bot is introducing section/question: "${trimmed}"`);
+      this.logAudit(roomName, 'TRANSCRIPT_IGNORED', `Ignored because bot is speaking next question: "${trimmed}"`);
       return;
     }
 
@@ -709,6 +841,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const lower = trimmed.toLowerCase();
       if (lower.includes('ready') || lower.includes('start') || isStartRequest(trimmed)) {
         this.logger.log(`[Part 2 Prep][${roomName}] ⚡ Candidate ready early during prep phase: "${trimmed}"`);
+        this.logAudit(roomName, 'PART2_PREP_FAST_READY', `Candidate signaled ready early: "${trimmed}"`);
         this.clearPrepTimer(roomName);
 
         const startSpeakingMsg = `👍 Great! Please start speaking now.`;
@@ -724,6 +857,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         }
       } else {
         this.logger.log(`[Part 2 Prep][${roomName}] Speech ignored during preparation phase: "${trimmed}"`);
+        this.logAudit(roomName, 'PART2_PREP_SPEECH_IGNORED', `Speech ignored during prep phase: "${trimmed}"`);
       }
       return;
     }
@@ -741,6 +875,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
     if (isFastTrack) {
       this.logger.log(`[Transcript][${roomName}] ⚡ Fast-track start fired: "${trimmed}"`);
+      this.logAudit(roomName, 'DEBOUNCE_FAST_TRACK', `Fast-track fired on start response: "${trimmed}"`);
       const existing = this.answerDebounceTimers.get(roomName);
       if (existing) clearTimeout(existing);
       this.answerDebounceTimers.delete(roomName);
@@ -771,6 +906,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Error checking section for debounce time:`, e);
     }
 
+    this.logAudit(roomName, 'DEBOUNCE_CHUNK_ADDED', `Appended FINAL chunk (${chunks.length} total). Debounce timer reset to ${debounceMs}ms`, {
+      latestChunk: trimmed,
+      accumulatedText: chunks.join(' '),
+      debounceMs,
+    });
+
     const timer = setTimeout(() => {
       this.answerDebounceTimers.delete(roomName);
       const fullText = (this.pendingTranscripts.get(roomName) || []).join(' ');
@@ -778,6 +919,10 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
       if (fullText.trim()) {
         this.logger.log(`[Transcript][${roomName}] ⏱️ Debounce fired (${debounceMs}ms): "${fullText}"`);
+        this.logAudit(roomName, 'DEBOUNCE_FIRED', `Debounce expired (${debounceMs}ms). Complete answer sent to processing: "${fullText}"`, {
+          fullText,
+          chunksCount: chunks.length,
+        });
         this.processVoiceAnswer(roomName, sessionId, fullText);
       }
     }, debounceMs);
@@ -790,11 +935,14 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     if (!existing) return;
 
     clearTimeout(existing);
+    this.logAudit(roomName, 'DEBOUNCE_RESET_BY_PARTIAL', 'Debounce timer extended due to active candidate speech (PARTIAL event)');
+
     const timer = setTimeout(() => {
       this.answerDebounceTimers.delete(roomName);
       const fullText = (this.pendingTranscripts.get(roomName) || []).join(' ');
       this.pendingTranscripts.delete(roomName);
       if (fullText.trim()) {
+        this.logAudit(roomName, 'DEBOUNCE_FIRED', `Debounce expired after reset: "${fullText}"`);
         this.processVoiceAnswer(roomName, sessionId, fullText);
       }
     }, this.ANSWER_DEBOUNCE_MS);
@@ -818,8 +966,14 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const session = await this.sessionService.getSessionById(sessionId);
       if (!session) return;
 
+      this.logAudit(roomName, 'USER_ANSWER_RECEIVED', `Candidate answer for Q${session.currentQuestionIndex}: "${fullText}"`, {
+        questionIndex: session.currentQuestionIndex,
+        answer: fullText,
+      });
+
       if (isRepeatRequest(fullText)) {
         this.logger.log(`[Repeat] Detected repeat request from voice in room ${roomName}: "${fullText}"`);
+        this.logAudit(roomName, 'REPEAT_DETECTED', `Candidate asked to repeat question: "${fullText}"`);
         await this.sendChatMessage(roomName, `🎤 ${fullText}`);
 
         const repeatText = await getRepeatText(session, this.interviewerService);
@@ -867,6 +1021,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       await this.processNextStep(session, roomName);
     } catch (error) {
       this.logger.error(`[processVoiceAnswer] Error:`, error);
+      this.logAudit(roomName, 'PROCESS_ANSWER_ERROR', `Error processing answer: ${error}`);
     }
   }
 
@@ -878,13 +1033,19 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     if (nextQuestionNumber > totalQuestions) {
       // Interview complete
       this.logger.log(`✅ Interview complete for session ${session.id}`);
+      this.logAudit(roomName, 'INTERVIEW_COMPLETE', `All ${totalQuestions} questions completed. Generating overall feedback...`);
 
+      const t0 = Date.now();
       const overallFeedback = await this.interviewerService.generateOverallFeedback(freshSession);
+      const feedbackTime = Date.now() - t0;
+      this.logAudit(roomName, 'AI_FEEDBACK_GENERATED', `Feedback generated in ${feedbackTime}ms`, { feedbackTime });
+
       await this.sessionService.completeSession(session.id, overallFeedback);
 
       const spokenCompletion = 'Congratulations! You have completed the interview. Thank you for your time. Please click on robot icon to end the interview.';
 
       await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, spokenCompletion, MessageType.TEXT);
+      this.logAudit(roomName, 'BOT_TTS_COMPLETION', spokenCompletion);
       await this.agentService.sendTTS(roomName, spokenCompletion);
 
       const shouldSend = await this.sessionService.shouldSendResultLink();
@@ -899,11 +1060,17 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
         await this.sendChatMessage(roomName, "The results are currently being processed and will be available within 5 minutes.", true);
         await this.sendChatMessage(roomName, resultMsg, true);
       }
+
+      // Upload audit log to MinIO on interview completion
+      await this.uploadAuditLog(roomName, session.id);
       return;
     }
 
     // Generate next question
+    const t0 = Date.now();
     const nextQuestion = await this.interviewerService.generateQuestion(freshSession, nextQuestionNumber);
+    const genTime = Date.now() - t0;
+
     await this.sessionService.addMessage(session.id, MessageRole.ASSISTANT, nextQuestion, MessageType.TEXT, nextQuestionNumber);
 
     const prevSection = freshSession.currentQuestionIndex > 0
@@ -938,6 +1105,14 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    this.logAudit(roomName, 'AI_QUESTION_GENERATED', `Generated Q${nextQuestionNumber}/${totalQuestions} in ${genTime}ms: "${nextQuestion}"`, {
+      questionNumber: nextQuestionNumber,
+      totalQuestions,
+      genTimeMs: genTime,
+      questionText: nextQuestion,
+      textToSpeak: questionTextToSpeak,
+    });
+
     if (nextSection && (nextSection.type === 'IELTS_PART2' || nextSection.name?.toLowerCase().includes('part 2'))) {
       const cueCardContent = nextQuestion;
       await this.handlePart2QuestionStart(roomName, session.id, nextQuestionNumber, totalQuestions, nextSection, cueCardContent, part2IntroPrefix);
@@ -969,9 +1144,16 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     this.isBotSpeakingNextQuestion.delete(roomName);
     const timeoutMs = isPart2 ? 25_000 : this.SILENCE_TIMEOUT_MS;
 
+    this.logAudit(roomName, 'SILENCE_TIMER_START', `Started ${timeoutMs / 1000}s silence timer for Q${questionNumber} (attempt ${retryCount + 1}/${this.MAX_REASK_COUNT + 1})`, {
+      questionNumber,
+      timeoutMs,
+      retryCount,
+    });
+
     const timer = setTimeout(async () => {
       this.silenceTimers.delete(roomName);
       this.logger.warn(`[Silence] No answer for Q${questionNumber} in room ${roomName} after ${timeoutMs}ms — skipping`);
+      this.logAudit(roomName, 'SILENCE_TIMEOUT_FIRED', `No answer after ${timeoutMs}ms for Q${questionNumber}. Retry count: ${retryCount}/${this.MAX_REASK_COUNT}`);
 
       try {
         const session = await this.sessionService.getSessionById(sessionId);
@@ -1124,7 +1306,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     if (typeof metadata === 'string') {
       try {
         metadata = JSON.parse(metadata);
-      } catch {}
+      } catch { }
     }
 
     const candidates = [

@@ -83,16 +83,11 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Log an audit event with exact timestamp and save to room's audit stream
+   * Log an audit event with exact timestamp and save to room's audit stream (file only)
    */
   public logAudit(roomName: string, tag: string, message: string, details?: any): void {
     const timestamp = new Date().toISOString();
     const entry: AuditLogEntry = { timestamp, tag, message, details };
-
-    const detailStr = details
-      ? ` | Data: ${typeof details === 'string' ? details : JSON.stringify(details)}`
-      : '';
-    this.logger.log(`[AUDIT][${roomName}][${tag}] ${message}${detailStr}`);
 
     const logs = this.sessionAuditLogs.get(roomName) || [];
     logs.push(entry);

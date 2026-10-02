@@ -615,54 +615,51 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     };
 
     es.onmessage = (event) => {
+      const rawData = event.data;
       try {
-        const rawString = event.data;
-        const parsed = JSON.parse(rawString);
-        const identity = parsed.participant_identity || '';
+        const parsed = JSON.parse(rawData);
+        const identity = parsed.participant_identity || parsed.identity || parsed.user_id || '';
+        const msgType = parsed.type || parsed.event || parsed.event_type || 'UNKNOWN';
+        const msgText = parsed.message || parsed.text || parsed.transcript || '';
 
         // Check if message is from bot itself (echo / agent speech)
-        if (identity.startsWith('agent-')) {
-          this.logAudit(roomName, 'AGENT_ECHO_IGNORED', `Agent self-speech ignored: "${parsed.message || ''}"`, {
-            raw_event_data: rawString,
+        if (identity && (identity.startsWith('agent-') || identity.includes('agent-'))) {
+          this.logAudit(roomName, 'AGENT_ECHO_IGNORED', `Agent self-speech: "${msgText}"`, {
+            raw_event_data: rawData,
             parsed,
           });
           return;
         }
 
-        if (parsed.type === 'PARTIAL') {
-          this.logAudit(roomName, 'AGENT_RAW_PARTIAL', `[RAW PARTIAL STREAM] text: "${parsed.message || ''}"`, {
-            text: parsed.message,
-            participant_identity: identity,
-            is_final: parsed.is_final,
-            raw_payload: parsed,
-            raw_sse_string: rawString,
+        if (msgType === 'PARTIAL') {
+          this.logAudit(roomName, 'AGENT_RAW_PARTIAL', `[PARTIAL] "${msgText}"`, {
+            raw_event_data: rawData,
+            parsed_payload: parsed,
           });
           this.resetDebounce(roomName, sessionId);
           this.clearSilenceTimer(roomName);
           return;
         }
 
-        if (parsed.type === 'FINAL') {
-          this.logAudit(roomName, 'AGENT_RAW_FINAL', `[RAW FINAL CHUNK] text: "${parsed.message || ''}"`, {
-            text: parsed.message,
-            participant_identity: identity,
-            is_final: parsed.is_final,
-            raw_payload: parsed,
-            raw_sse_string: rawString,
+        if (msgType === 'FINAL') {
+          this.logAudit(roomName, 'AGENT_RAW_FINAL', `[FINAL] "${msgText}"`, {
+            raw_event_data: rawData,
+            parsed_payload: parsed,
           });
-          this.handleFinalTranscript(roomName, sessionId, parsed.message);
+          this.handleFinalTranscript(roomName, sessionId, msgText);
           return;
         }
 
-        // Any other event types returned from voice agent
-        this.logAudit(roomName, 'AGENT_RAW_OTHER_EVENT', `[RAW OTHER EVENT] type=${parsed.type}: "${parsed.message || ''}"`, {
-          raw_payload: parsed,
-          raw_sse_string: rawString,
+        // Any other event types returned from voice agent (e.g., VAD, metadata, custom payload)
+        this.logAudit(roomName, 'AGENT_RAW_OTHER_EVENT', `[OTHER TYPE: ${msgType}] "${msgText}"`, {
+          raw_event_data: rawData,
+          parsed_payload: parsed,
         });
-      } catch {
-        this.logger.warn(`[Transcript SSE][${roomName}] Failed to parse raw data: ${event.data}`);
-        this.logAudit(roomName, 'AGENT_RAW_UNPARSED', `Failed to parse SSE JSON frame: ${event.data}`, {
-          raw_sse_string: event.data,
+      } catch (err: any) {
+        this.logger.warn(`[Transcript SSE][${roomName}] Non-JSON or Unparsed Event: ${rawData}`);
+        this.logAudit(roomName, 'AGENT_RAW_UNPARSED', `Raw SSE Frame: ${rawData}`, {
+          raw_event_data: rawData,
+          parse_error: err.message,
         });
       }
     };

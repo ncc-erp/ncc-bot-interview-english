@@ -107,23 +107,23 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
     try {
       const header = [
         '================================================================================',
-        '🎙️ NCC INTERVIEW BOT - DETAILED SESSION AUDIT LOG',
+        '🎙️ NCC INTERVIEW BOT - FULL AUDIT LOG FOR ANALYSIS',
         `Room Name:     ${roomName}`,
         `Session ID:    ${sessionId || 'N/A'}`,
         `Generated At:  ${new Date().toISOString()}`,
         `Total Events:  ${logs.length}`,
         '================================================================================\n',
-        'TIMELINE OF EVENTS (Agent SSE Streams, User Transcripts, Debounce & TTS):',
+        'TIMELINE OF EVENTS (Agent Transcripts, Debounce Logic, AI Responses & Bot TTS):',
         '--------------------------------------------------------------------------------',
       ];
 
       const lines = logs.map((log) => {
-        let line = `[${log.timestamp}] [${log.tag.padEnd(24, ' ')}] ${log.message}`;
+        let line = `[${log.timestamp}] [${log.tag.padEnd(26, ' ')}] ${log.message}`;
         if (log.details !== undefined) {
           const formatted = typeof log.details === 'string'
             ? log.details
             : JSON.stringify(log.details, null, 2);
-          line += `\n    └─ Details: ${formatted.replace(/\n/g, '\n       ')}`;
+          line += `\n    └─ Data: ${formatted.replace(/\n/g, '\n       ')}`;
         }
         return line;
       });
@@ -1249,6 +1249,8 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async sendChatMessage(roomName: string, text: string, isSendNoti: boolean = false): Promise<void> {
+    this.logAudit(roomName, 'BOT_SEND_CHAT', `Bot sent chat message: "${text}"`, { text, isSendNoti });
+
     if (!this.isChatEnabled() && !isSendNoti) return;
 
     try {
@@ -1268,6 +1270,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       );
     } catch (error: any) {
       this.logger.error(`Failed to send chat message to room ${roomName}:`, error.message);
+      this.logAudit(roomName, 'BOT_SEND_CHAT_ERROR', `Failed to send chat message: ${error.message}`);
     }
   }
 
@@ -1357,6 +1360,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
 
   private async handleRepeatQuestionRequest(roomName: string, participantIdentity: string): Promise<void> {
     try {
+      this.logAudit(roomName, 'REPEAT_REQUEST_COMMAND', `User ${participantIdentity} requested repeat question via chat command`);
       const session = await this.sessionService.findSessionByUserAndRoom(participantIdentity, roomName);
       if (!session) {
         this.logger.warn(`[Repeat] No active session found for user ${participantIdentity} in room ${roomName}`);
@@ -1368,10 +1372,12 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
       const repeatText = await getRepeatText(session, this.interviewerService);
       if (session.currentQuestionIndex === 0) {
         await this.sendChatMessage(roomName, `I didn't catch that. Let me repeat the greeting.`);
+        this.logAudit(roomName, 'BOT_SEND_TTS_REPEAT_GREETING', `Repeating greeting: "${repeatText}"`);
         await this.agentService.sendTTS(roomName, repeatText);
         await this.sendChatMessage(roomName, `🤖 ${repeatText}`);
       } else {
         await this.sendChatMessage(roomName, `Let me repeat the question.`);
+        this.logAudit(roomName, 'BOT_SEND_TTS_REPEAT_QUESTION', `Repeating Q${session.currentQuestionIndex}: "${repeatText}"`);
         await this.agentService.sendTTS(roomName, repeatText);
         await this.sendChatMessage(roomName, `❓ **Question ${session.currentQuestionIndex}/${session.template.numberOfQuestions}:**\n${repeatText}`);
 

@@ -631,6 +631,7 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
           this.logAudit(roomName, 'SSE_STREAM_PARTIAL', `PARTIAL speech: "${parsed.message || ''}"`, {
             participant: identity,
             is_final: parsed.is_final,
+            raw: parsed,
           });
           this.resetDebounce(roomName, sessionId);
           this.clearSilenceTimer(roomName);
@@ -643,7 +644,14 @@ export class OrchestratorSSEService implements OnModuleInit, OnModuleDestroy {
             raw: parsed,
           });
           this.handleFinalTranscript(roomName, sessionId, parsed.message);
+          return;
         }
+
+        // Any other event types from agent
+        this.logAudit(roomName, 'SSE_STREAM_OTHER', `Event type=${parsed.type}: "${parsed.message || ''}"`, {
+          participant: identity,
+          raw: parsed,
+        });
       } catch {
         this.logger.warn(`[Transcript SSE][${roomName}] Failed to parse: ${event.data}`);
         this.logAudit(roomName, 'SSE_STREAM_PARSE_ERR', `Failed to parse transcript event: ${event.data}`);

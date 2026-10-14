@@ -48,7 +48,8 @@ export class MinioService {
 
   async uploadSessionLog(sessionId: string, logContent: string, roomName?: string): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const objectName = `logs/session_${sessionId || roomName || 'unknown'}_${timestamp}.log`;
+    // Bot credentials can only write under MINIO_FOLDER, so logs live in a subfolder of it
+    const objectName = `${this.folder}/logs/session_${sessionId || roomName || 'unknown'}_${timestamp}.log`;
     const buffer = Buffer.from(logContent, 'utf-8');
 
     this.logger.log(`⬆️ Uploading session audit log to MinIO: ${objectName} (${buffer.length} bytes)...`);
